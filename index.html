@@ -1,119 +1,145 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>VR 360 Video</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<head>
+  <meta charset="utf-8">
+  <title>VR 360 Video</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 
-    <!-- Force VR support -->
-    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+    }
+    a-scene {
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+    #enter-vr-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 20px 40px;
+      font-size: 1.5em;
+      background-color: #ff5500;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      z-index: 1000;
+      cursor: pointer;
+    }
+    #install-msg {
+      position: absolute;
+      bottom: 10px;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-size: 1em;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      z-index: 999;
+    }
+    #countdown {
+      position: absolute;
+      bottom: 50%;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-size: 2em;
+      z-index: 999;
+      display: none;
+    }
+  </style>
+</head>
+<body>
 
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        background: black;
-        overflow: hidden;
-      }
-      a-scene {
-        width: 100%;
-        height: 100%;
-        display: none;
-      }
-      #enter-vr-btn {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 20px 40px;
-        font-size: 1.5em;
-        background-color: #ff5500;
-        color: white;
-        border: none;
-        border-radius: 10px;
-        z-index: 1000;
-        cursor: pointer;
-      }
-      #install-msg {
-        position: absolute;
-        bottom: 10px;
-        width: 100%;
-        text-align: center;
-        color: white;
-        font-size: 1em;
-        background: rgba(0, 0, 0, 0.6);
-        padding: 10px;
-        z-index: 999;
-      }
-    </style>
-  </head>
-  <body>
+  <button id="enter-vr-btn">🎥 Enter VR</button>
+  <div id="install-msg">For best experience, tap <strong>Share → Add to Home Screen</strong> to hide Safari toolbar.</div>
+  <div id="countdown">Starting in 5...</div>
 
-    <button id="enter-vr-btn">🎥 Enter VR</button>
-    <div id="install-msg">For best experience, tap <strong>Share → Add to Home Screen</strong> to hide Safari toolbar.</div>
+  <a-scene embedded vr-mode-ui="enabled: true" id="scene">
+    <a-assets>
+      <video id="video" loop muted playsinline webkit-playsinline crossorigin="anonymous">
+        <source src="https://dl.dropboxusercontent.com/scl/fi/kd1ct8ihd1yoakbe65vju/vr_360_video.mp4?rlkey=y1pqz14a0kfiafqn8npdu9pdm&raw=1" type="video/mp4">
+      </video>
+      <audio id="silent-audio" autoplay loop>
+        <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg">
+      </audio>
+    </a-assets>
 
-    <a-scene embedded vr-mode-ui="enabled: true" id="scene">
-      <a-assets>
-        <video id="video" loop muted playsinline webkit-playsinline crossorigin="anonymous">
-          <source src="https://dl.dropboxusercontent.com/scl/fi/kd1ct8ihd1yoakbe65vju/vr_360_video.mp4?rlkey=y1pqz14a0kfiafqn8npdu9pdm" type="video/mp4">
-        </video>
-        <audio id="silent-audio" autoplay loop>
-          <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg">
-        </audio>
-      </a-assets>
+    <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
+    <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
+  </a-scene>
 
-      <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
-      <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
-    </a-scene>
+  <script>
+    const button = document.getElementById('enter-vr-btn');
+    const installMsg = document.getElementById('install-msg');
+    const scene = document.getElementById('scene');
+    const video = document.getElementById('video');
+    const audio = document.getElementById('silent-audio');
+    const countdown = document.getElementById('countdown');
 
-    <script>
-      const button = document.getElementById('enter-vr-btn');
-      const installMsg = document.getElementById('install-msg');
-      const scene = document.getElementById('scene');
-      const video = document.getElementById('video');
-      const audio = document.getElementById('silent-audio');
+    let hasStarted = false;
 
-      button.addEventListener('click', async () => {
-        button.style.display = 'none';
-        installMsg.style.display = 'none';
+    button.addEventListener('click', async () => {
+      if (hasStarted) return;
+      hasStarted = true;
 
-        // Request motion permission on iOS
-        if (typeof DeviceMotionEvent !== 'undefined' &&
-            typeof DeviceMotionEvent.requestPermission === 'function') {
-          try {
-            await DeviceMotionEvent.requestPermission();
-          } catch (err) {
-            console.warn('Motion permission denied:', err);
-          }
-        }
+      button.style.display = 'none';
+      installMsg.style.display = 'none';
+      countdown.style.display = 'block';
 
-        // Start silent audio
-        if (audio && audio.paused) {
-          try {
-            await audio.play();
-          } catch (err) {
-            console.warn('Silent audio play failed:', err);
-          }
-        }
-
-        // Start video
+      // Motion permission for iOS
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
-          await video.play();
+          await DeviceMotionEvent.requestPermission();
         } catch (err) {
-          console.warn('Video play error:', err);
+          console.warn('Motion permission denied:', err);
         }
+      }
 
-        // Fullscreen fallback (desktop + PWA)
-        const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
-        if (fs) {
-          fs.call(scene);
+      // Silent audio to prevent iPhone dimming
+      try {
+        await audio.play();
+      } catch (err) {
+        console.warn('Silent audio play failed:', err);
+      }
+
+      // Start countdown
+      let t = 5;
+      countdown.innerText = `Starting in ${t}...`;
+      const timer = setInterval(() => {
+        t--;
+        if (t <= 0) {
+          clearInterval(timer);
+          countdown.style.display = 'none';
+
+          // Show scene
+          scene.style.display = 'block';
+
+          // Trigger resize to fix iPhone black screen
+          setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+          }, 100);
+
+          // Start video
+          video.play().catch(err => console.warn('Video play error:', err));
+
+          // Try fullscreen
+          const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
+          if (fs) fs.call(scene);
+        } else {
+          countdown.innerText = `Starting in ${t}...`;
         }
-
-        // Show scene
-        scene.style.display = 'block';
-      });
-    </script>
-  </body>
+      }, 1000);
+    });
+  </script>
+</body>
 </html>
