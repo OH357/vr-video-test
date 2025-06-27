@@ -36,7 +36,7 @@
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
       <a-assets>
         <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
-          <source src="https://drive.google.com/uc?export=download&id=1S4qAIdSWSSa_YVTRhl_NPt8pprgKowgU" type="video/mp4">
+          <source src="https://dl.dropboxusercontent.com/scl/fi/tru3cfhym1gxex1tjsb16/vr_360_video.mp4" type="video/mp4">
         </video>
       </a-assets>
 
@@ -52,7 +52,6 @@
       document.addEventListener('click', async () => {
         splash.style.display = 'none';
 
-        // iOS motion permission
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
           try {
