@@ -34,6 +34,17 @@
       z-index: 1000;
       cursor: pointer;
     }
+    #install-msg {
+      position: absolute;
+      bottom: 10px;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-size: 1em;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      z-index: 999;
+    }
     #countdown {
       position: absolute;
       bottom: 50%;
@@ -41,7 +52,7 @@
       text-align: center;
       color: white;
       font-size: 2em;
-      z-index: 999;
+      z-index: 998;
       display: none;
     }
   </style>
@@ -49,6 +60,7 @@
 <body>
 
   <button id="enter-vr-btn">🎥 Enter VR</button>
+  <div id="install-msg">📲 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
   <div id="countdown">Starting in 5...</div>
 
   <a-scene embedded vr-mode-ui="enabled: true" id="scene">
@@ -67,16 +79,26 @@
 
   <script>
     const button = document.getElementById('enter-vr-btn');
+    const installMsg = document.getElementById('install-msg');
     const scene = document.getElementById('scene');
     const video = document.getElementById('video');
     const audio = document.getElementById('silent-audio');
     const countdown = document.getElementById('countdown');
 
+    if (localStorage.getItem('installPromptDismissed')) {
+      installMsg.style.display = 'none';
+    }
+
+    installMsg.addEventListener('click', () => {
+      installMsg.style.display = 'none';
+      localStorage.setItem('installPromptDismissed', '1');
+    });
+
     button.addEventListener('click', async () => {
       button.style.display = 'none';
       countdown.style.display = 'block';
 
-      // iOS motion permission
+      // Request iOS motion permission
       if (typeof DeviceMotionEvent !== 'undefined' &&
           typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
@@ -86,36 +108,40 @@
         }
       }
 
-      // Prevent screen dimming
+      // Play silent audio to keep screen awake
       try {
         await audio.play();
       } catch (err) {
         console.warn('Silent audio play failed:', err);
       }
 
-      // Countdown from 5
+      // Start video immediately (required for iOS)
+      try {
+        await video.play();
+      } catch (err) {
+        console.warn('Video play error:', err);
+      }
+
+      // Enter fullscreen
+      const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
+      if (fs) fs.call(scene);
+
+      // Show the scene now
+      scene.style.display = 'block';
+
+      // Force resize to fix WebGL display
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+
+      // Visual 5-second countdown (optional)
       let t = 5;
       countdown.innerText = `Starting in ${t}...`;
-      const timer = setInterval(async () => {
+      const timer = setInterval(() => {
         t--;
         if (t <= 0) {
           clearInterval(timer);
           countdown.style.display = 'none';
-          scene.style.display = 'block';
-
-          // Fix iOS WebGL rendering delay
-          setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
-          }, 100);
-
-          try {
-            await video.play();
-          } catch (err) {
-            console.warn('Video play error:', err);
-          }
-
-          const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
-          if (fs) fs.call(scene);
         } else {
           countdown.innerText = `Starting in ${t}...`;
         }
