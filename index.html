@@ -70,10 +70,8 @@
         installMsg.style.display = 'none';
       }, 6000);
 
-      // User taps anywhere to begin
-      document.addEventListener('click', async () => {
-        installMsg.style.display = 'none';
-
+      // Start video and countdown automatically after page load
+      window.onload = async () => {
         // Motion permission (iOS)
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
@@ -115,7 +113,7 @@
             countdown.textContent = `Starting in ${timeLeft}...`;
           }
         }, 1000);
-      });
+      };
     </script>
   </body>
 </html>
