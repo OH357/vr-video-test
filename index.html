@@ -6,11 +6,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <style>
-      html, body { margin: 0; padding: 0; height: 100%; background: black; overflow: hidden; }
-      a-scene { height: 100%; width: 100%; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: black;
+        overflow: hidden;
+      }
+      #splash {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: black;
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 999;
+        font-size: 1.3em;
+        padding: 2em;
+      }
     </style>
   </head>
   <body>
+    <div id="splash">
+      👆 Tap anywhere to enable sensors and enter VR mode.
+    </div>
+
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
       <a-assets>
         <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
@@ -25,16 +47,30 @@
     <script>
       const video = document.getElementById('video');
       const scene = document.getElementById('scene');
+      const splash = document.getElementById('splash');
 
-      document.addEventListener('click', () => {
-        // Play the video
+      document.addEventListener('click', async () => {
+        // Hide splash screen
+        splash.style.display = 'none';
+
+        // Request motion sensor permission for iOS
+        if (typeof DeviceMotionEvent !== 'undefined' &&
+            typeof DeviceMotionEvent.requestPermission === 'function') {
+          try {
+            const response = await DeviceMotionEvent.requestPermission();
+            console.log('Motion permission:', response);
+          } catch (err) {
+            console.warn('Motion permission denied:', err);
+          }
+        }
+
+        // Start video
         if (video.paused) video.play();
 
-        // Request fullscreen on scene
+        // Attempt fullscreen (mostly works on desktop)
         const requestFullscreen =
           scene.requestFullscreen ||
           scene.webkitRequestFullscreen ||
-          scene.mozRequestFullScreen ||
           scene.msRequestFullscreen;
 
         if (requestFullscreen) {
