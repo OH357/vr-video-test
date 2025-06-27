@@ -5,10 +5,8 @@
     <title>VR 360 Video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
-    <!-- Force VR icon even on iOS -->
+    <!-- Force VR support -->
     <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
-
-    <!-- A-Frame core -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 
     <style>
@@ -22,30 +20,39 @@
       a-scene {
         width: 100%;
         height: 100%;
+        display: none;
       }
-      #overlay, #countdown {
+      #enter-vr-btn {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 20px 40px;
+        font-size: 1.5em;
+        background-color: #ff5500;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        z-index: 1000;
+        cursor: pointer;
+      }
+      #install-msg {
         position: absolute;
         bottom: 10px;
-        left: 0;
-        right: 0;
+        width: 100%;
         text-align: center;
         color: white;
-        font-size: 1.2em;
-        background: rgba(0, 0, 0, 0.5);
+        font-size: 1em;
+        background: rgba(0, 0, 0, 0.6);
         padding: 10px;
         z-index: 999;
-      }
-      #countdown {
-        bottom: 50%;
-        font-size: 2em;
       }
     </style>
   </head>
   <body>
-    <div id="overlay">
-      🎥 Tap the <strong>VR icon</strong> below to enter fullscreen Cardboard mode
-    </div>
-    <div id="countdown" style="display:none;">Starting in 5...</div>
+
+    <button id="enter-vr-btn">🎥 Enter VR</button>
+    <div id="install-msg">For best experience, tap <strong>Share → Add to Home Screen</strong> to hide Safari toolbar.</div>
 
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
       <a-assets>
@@ -62,19 +69,17 @@
     </a-scene>
 
     <script>
+      const button = document.getElementById('enter-vr-btn');
+      const installMsg = document.getElementById('install-msg');
+      const scene = document.getElementById('scene');
       const video = document.getElementById('video');
       const audio = document.getElementById('silent-audio');
-      const scene = document.getElementById('scene');
-      const overlay = document.getElementById('overlay');
-      const countdown = document.getElementById('countdown');
 
-      // Hide overlay after 6s
-      setTimeout(() => {
-        if (overlay) overlay.style.display = 'none';
-      }, 6000);
+      button.addEventListener('click', async () => {
+        button.style.display = 'none';
+        installMsg.style.display = 'none';
 
-      document.addEventListener('click', async () => {
-        // Request motion permission (iOS)
+        // Request motion permission on iOS
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
           try {
@@ -84,7 +89,7 @@
           }
         }
 
-        // Play silent audio to prevent screen locking
+        // Start silent audio
         if (audio && audio.paused) {
           try {
             await audio.play();
@@ -93,30 +98,21 @@
           }
         }
 
-        // Optional fullscreen fallback (desktop)
-        const requestFullscreen =
-          scene.requestFullscreen ||
-          scene.webkitRequestFullscreen ||
-          scene.msRequestFullscreen;
-
-        if (requestFullscreen) {
-          requestFullscreen.call(scene);
+        // Start video
+        try {
+          await video.play();
+        } catch (err) {
+          console.warn('Video play error:', err);
         }
 
-        // Countdown before playing video
-        countdown.style.display = 'block';
-        let timeLeft = 5;
-        countdown.textContent = `Starting in ${timeLeft}...`;
-        const timer = setInterval(() => {
-          timeLeft -= 1;
-          if (timeLeft <= 0) {
-            clearInterval(timer);
-            countdown.style.display = 'none';
-            video.play().catch(err => console.warn('Autoplay error:', err));
-          } else {
-            countdown.textContent = `Starting in ${timeLeft}...`;
-          }
-        }, 1000);
+        // Fullscreen fallback (desktop + PWA)
+        const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
+        if (fs) {
+          fs.call(scene);
+        }
+
+        // Show scene
+        scene.style.display = 'block';
       });
     </script>
   </body>
