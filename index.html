@@ -36,7 +36,7 @@
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
       <a-assets>
         <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
-          <source src="https://drive.google.com/uc?export=download&id=1MBGZb-TL6f8FJj1HlcLseiFqToiW1-q0" type="video/mp4">
+          <source src="https://drive.google.com/uc?export=download&id=1S4qAIdSWSSa_YVTRhl_NPt8pprgKowgU" type="video/mp4">
         </video>
       </a-assets>
 
@@ -52,13 +52,13 @@
       document.addEventListener('click', async () => {
         splash.style.display = 'none';
 
-        // Request iOS motion permission
+        // iOS motion permission
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
           try {
             await DeviceMotionEvent.requestPermission();
           } catch (err) {
-            console.warn('Motion permission error:', err);
+            console.warn('Motion permission denied:', err);
           }
         }
 
