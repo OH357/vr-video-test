@@ -1,119 +1,100 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>VR 360 Video</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<head>
+  <meta charset="utf-8">
+  <title>VR 360 Video</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+    }
+    a-scene {
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+    #countdown {
+      position: absolute;
+      bottom: 50%;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-size: 2em;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
 
-    <!-- Force VR icon for iOS -->
-    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <div id="countdown" style="display:none;">Starting in 5...</div>
 
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        background: black;
-        overflow: hidden;
-      }
-      a-scene {
-        width: 100%;
-        height: 100%;
-        display: none;
-      }
-      #install-msg, #countdown {
-        position: absolute;
-        bottom: 10px;
-        width: 100%;
-        text-align: center;
-        color: white;
-        font-size: 1.2em;
-        background: rgba(0, 0, 0, 0.6);
-        padding: 10px;
-        z-index: 999;
-      }
-      #countdown {
-        bottom: 50%;
-        font-size: 2em;
-      }
-    </style>
-  </head>
-  <body>
+  <a-scene embedded vr-mode-ui="enabled: true" id="scene">
+    <a-assets>
+      <video id="video" autoplay muted playsinline webkit-playsinline crossorigin="anonymous">
+        <source src="https://dl.dropboxusercontent.com/scl/fi/kd1ct8ihd1yoakbe65vju/vr_360_video.mp4?rlkey=y1pqz14a0kfiafqn8npdu9pdm&raw=1" type="video/mp4">
+      </video>
+      <audio id="silent-audio" autoplay loop>
+        <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg">
+      </audio>
+    </a-assets>
 
-    <div id="install-msg">📱 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
-    <div id="countdown" style="display:none;">Starting in 5...</div>
+    <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
+    <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
+  </a-scene>
 
-    <a-scene embedded vr-mode-ui="enabled: true" id="scene">
-      <a-assets>
-        <video id="video" loop muted playsinline webkit-playsinline crossorigin="anonymous">
-          <source src="https://dl.dropboxusercontent.com/scl/fi/kd1ct8ihd1yoakbe65vju/vr_360_video.mp4?rlkey=y1pqz14a0kfiafqn8npdu9pdm" type="video/mp4">
-        </video>
-        <audio id="silent-audio" autoplay loop>
-          <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg">
-        </audio>
-      </a-assets>
+  <script>
+    const video = document.getElementById('video');
+    const audio = document.getElementById('silent-audio');
+    const scene = document.getElementById('scene');
+    const countdown = document.getElementById('countdown');
 
-      <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
-      <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
-    </a-scene>
+    document.addEventListener('click', async () => {
+      countdown.style.display = 'block';
 
-    <script>
-      const video = document.getElementById('video');
-      const audio = document.getElementById('silent-audio');
-      const scene = document.getElementById('scene');
-      const installMsg = document.getElementById('install-msg');
-      const countdown = document.getElementById('countdown');
-
-      // Hide install tip after 6s
-      setTimeout(() => {
-        installMsg.style.display = 'none';
-      }, 6000);
-
-      // Start video and countdown automatically after page load
-      window.onload = async () => {
-        // Motion permission (iOS)
-        if (typeof DeviceMotionEvent !== 'undefined' &&
-            typeof DeviceMotionEvent.requestPermission === 'function') {
-          try {
-            await DeviceMotionEvent.requestPermission();
-          } catch (err) {
-            console.warn('Motion permission denied:', err);
-          }
-        }
-
-        // Start silent audio (keep screen awake)
+      // iOS motion permission
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
-          await audio.play();
+          await DeviceMotionEvent.requestPermission();
         } catch (err) {
-          console.warn('Silent audio play failed:', err);
+          console.warn('Motion permission denied:', err);
         }
+      }
 
-        // Fullscreen fallback
-        const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
-        if (fs) {
-          fs.call(scene);
+      // Play silent audio to prevent dimming
+      try {
+        await audio.play();
+      } catch (e) {
+        console.warn('Silent audio failed:', e);
+      }
+
+      // Request fullscreen (optional on iOS)
+      const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
+      if (fs) fs.call(scene);
+
+      // Show scene
+      scene.style.display = 'block';
+
+      // 5 second countdown
+      let t = 5;
+      countdown.innerText = `Starting in ${t}...`;
+      const timer = setInterval(() => {
+        t--;
+        if (t <= 0) {
+          clearInterval(timer);
+          countdown.style.display = 'none';
+          video.play().catch(err => console.warn('Video play error:', err));
+        } else {
+          countdown.innerText = `Starting in ${t}...`;
         }
-
-        // Show scene
-        scene.style.display = 'block';
-
-        // Start 5-second countdown
-        countdown.style.display = 'block';
-        let timeLeft = 5;
-        countdown.textContent = `Starting in ${timeLeft}...`;
-
-        const timer = setInterval(() => {
-          timeLeft--;
-          if (timeLeft <= 0) {
-            clearInterval(timer);
-            countdown.style.display = 'none';
-            video.play().catch(err => console.warn('Autoplay error:', err));
-          } else {
-            countdown.textContent = `Starting in ${timeLeft}...`;
-          }
-        }, 1000);
-      };
-    </script>
-  </body>
+      }, 1000);
+    });
+  </script>
+</body>
 </html>
