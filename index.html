@@ -5,7 +5,7 @@
     <title>VR 360 Video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
-    <!-- Force VR button even on iOS -->
+    <!-- Force VR icon even on iOS -->
     <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
 
     <!-- A-Frame core -->
@@ -23,7 +23,7 @@
         width: 100%;
         height: 100%;
       }
-      #overlay {
+      #overlay, #countdown {
         position: absolute;
         bottom: 10px;
         left: 0;
@@ -35,18 +35,26 @@
         padding: 10px;
         z-index: 999;
       }
+      #countdown {
+        bottom: 50%;
+        font-size: 2em;
+      }
     </style>
   </head>
   <body>
     <div id="overlay">
       🎥 Tap the <strong>VR icon</strong> below to enter fullscreen Cardboard mode
     </div>
+    <div id="countdown" style="display:none;">Starting in 5...</div>
 
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
       <a-assets>
-        <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
+        <video id="video" loop muted playsinline webkit-playsinline crossorigin="anonymous">
           <source src="https://dl.dropboxusercontent.com/scl/fi/kd1ct8ihd1yoakbe65vju/vr_360_video.mp4?rlkey=y1pqz14a0kfiafqn8npdu9pdm" type="video/mp4">
         </video>
+        <audio id="silent-audio" autoplay loop>
+          <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg">
+        </audio>
       </a-assets>
 
       <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
@@ -55,17 +63,18 @@
 
     <script>
       const video = document.getElementById('video');
+      const audio = document.getElementById('silent-audio');
       const scene = document.getElementById('scene');
+      const overlay = document.getElementById('overlay');
+      const countdown = document.getElementById('countdown');
 
-      // Hide overlay after 6 seconds
+      // Hide overlay after 6s
       setTimeout(() => {
-        const overlay = document.getElementById('overlay');
         if (overlay) overlay.style.display = 'none';
       }, 6000);
 
-      // Request motion access and wake lock
       document.addEventListener('click', async () => {
-        // iOS motion sensor permission
+        // Request motion permission (iOS)
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
           try {
@@ -75,21 +84,16 @@
           }
         }
 
-        // Autoplay fallback
-        if (video.paused) {
-          video.play().catch(err => console.warn('Autoplay error:', err));
-        }
-
-        // Wake Lock to prevent phone from sleeping
-        if ('wakeLock' in navigator) {
+        // Play silent audio to prevent screen locking
+        if (audio && audio.paused) {
           try {
-            await navigator.wakeLock.request('screen');
+            await audio.play();
           } catch (err) {
-            console.warn('WakeLock failed:', err);
+            console.warn('Silent audio play failed:', err);
           }
         }
 
-        // Optional fullscreen fallback (desktop only)
+        // Optional fullscreen fallback (desktop)
         const requestFullscreen =
           scene.requestFullscreen ||
           scene.webkitRequestFullscreen ||
@@ -98,6 +102,21 @@
         if (requestFullscreen) {
           requestFullscreen.call(scene);
         }
+
+        // Countdown before playing video
+        countdown.style.display = 'block';
+        let timeLeft = 5;
+        countdown.textContent = `Starting in ${timeLeft}...`;
+        const timer = setInterval(() => {
+          timeLeft -= 1;
+          if (timeLeft <= 0) {
+            clearInterval(timer);
+            countdown.style.display = 'none';
+            video.play().catch(err => console.warn('Autoplay error:', err));
+          } else {
+            countdown.textContent = `Starting in ${timeLeft}...`;
+          }
+        }, 1000);
       });
     </script>
   </body>
