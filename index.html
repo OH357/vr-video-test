@@ -4,7 +4,13 @@
     <meta charset="utf-8">
     <title>VR 360 Video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <!-- Force VR button even on iOS -->
+    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
+
+    <!-- A-Frame core -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
     <style>
       html, body {
         margin: 0;
@@ -33,7 +39,7 @@
   </head>
   <body>
     <div id="overlay">
-      🎥 Tap the <strong>VR icon</strong> to enter fullscreen Cardboard mode
+      🎥 Tap the <strong>VR icon</strong> below to enter fullscreen Cardboard mode
     </div>
 
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
@@ -57,8 +63,9 @@
         if (overlay) overlay.style.display = 'none';
       }, 6000);
 
-      // Request motion access + video playback + fullscreen
+      // Request motion access and wake lock
       document.addEventListener('click', async () => {
+        // iOS motion sensor permission
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
           try {
@@ -68,10 +75,21 @@
           }
         }
 
+        // Autoplay fallback
         if (video.paused) {
           video.play().catch(err => console.warn('Autoplay error:', err));
         }
 
+        // Wake Lock to prevent phone from sleeping
+        if ('wakeLock' in navigator) {
+          try {
+            await navigator.wakeLock.request('screen');
+          } catch (err) {
+            console.warn('WakeLock failed:', err);
+          }
+        }
+
+        // Optional fullscreen fallback (desktop only)
         const requestFullscreen =
           scene.requestFullscreen ||
           scene.webkitRequestFullscreen ||
