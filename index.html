@@ -36,7 +36,7 @@
     <a-scene embedded vr-mode-ui="enabled: true" id="scene">
       <a-assets>
         <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
-          <source src="vr_360_video.mp4" type="video/mp4">
+          <source src="https://drive.google.com/uc?export=download&id=1MBGZb-TL6f8FJj1HlcLseiFqToiW1-q0" type="video/mp4">
         </video>
       </a-assets>
 
@@ -50,32 +50,26 @@
       const splash = document.getElementById('splash');
 
       document.addEventListener('click', async () => {
-        // Hide splash screen
         splash.style.display = 'none';
 
-        // Request motion sensor permission for iOS
+        // Request iOS motion permission
         if (typeof DeviceMotionEvent !== 'undefined' &&
             typeof DeviceMotionEvent.requestPermission === 'function') {
           try {
-            const response = await DeviceMotionEvent.requestPermission();
-            console.log('Motion permission:', response);
+            await DeviceMotionEvent.requestPermission();
           } catch (err) {
-            console.warn('Motion permission denied:', err);
+            console.warn('Motion permission error:', err);
           }
         }
 
-        // Start video
         if (video.paused) video.play();
 
-        // Attempt fullscreen (mostly works on desktop)
         const requestFullscreen =
           scene.requestFullscreen ||
           scene.webkitRequestFullscreen ||
           scene.msRequestFullscreen;
 
-        if (requestFullscreen) {
-          requestFullscreen.call(scene);
-        }
+        if (requestFullscreen) requestFullscreen.call(scene);
       });
     </script>
   </body>
