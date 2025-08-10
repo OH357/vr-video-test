@@ -66,7 +66,7 @@
   <a-scene embedded vr-mode-ui="enabled: true" id="scene">
     <a-assets>
       <video id="video" loop muted playsinline webkit-playsinline crossorigin="anonymous">
-        <source src="https://dl.dropboxusercontent.com/scl/fi/kd1ct8ihd1yoakbe65vju/vr_360_video.mp4?rlkey=y1pqz14a0kfiafqn8npdu9pdm&raw=1" type="video/mp4">
+        <source src="https://liveutk-my.sharepoint.com/:v:/r/personal/aalkafou_vols_utk_edu/Documents/360%20Video/3600_row_videos_20250808210212.mp4?csf=1&web=1&e=o0EpxH" type="video/mp4">
       </video>
       <audio id="silent-audio" autoplay loop>
         <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg">
@@ -98,7 +98,6 @@
       button.style.display = 'none';
       countdown.style.display = 'block';
 
-      // Request iOS motion permission
       if (typeof DeviceMotionEvent !== 'undefined' &&
           typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
@@ -108,33 +107,26 @@
         }
       }
 
-      // Play silent audio to keep screen awake
       try {
         await audio.play();
       } catch (err) {
         console.warn('Silent audio play failed:', err);
       }
 
-      // Start video immediately (required for iOS)
       try {
         await video.play();
       } catch (err) {
         console.warn('Video play error:', err);
       }
 
-      // Enter fullscreen
       const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
       if (fs) fs.call(scene);
 
-      // Show the scene now
       scene.style.display = 'block';
-
-      // Force resize to fix WebGL display
       setTimeout(() => {
         window.dispatchEvent(new Event('resize'));
       }, 100);
 
-      // Visual 5-second countdown (optional)
       let t = 5;
       countdown.innerText = `Starting in ${t}...`;
       const timer = setInterval(() => {
