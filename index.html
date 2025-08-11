@@ -23,13 +23,13 @@
 <body>
 
 <button id="enter">Enter VR</button>
-<div id="msg">If nothing happens: Settings → Safari → Motion & Orientation Access = ON.</div>
+<div id="msg">If nothing happens: iOS Settings → Safari → Motion & Orientation Access = ON.</div>
 
 <a-scene id="scene"
          renderer="antialias:true; xrCompatible:true"
          vr-mode-ui="enabled:true"
          loading-screen="enabled:false">
-  <!-- We do NOT use <a-assets> to avoid the preloader holding us -->
+  <!-- No <a-assets> to avoid the spinner; we bind video after a user tap -->
   <a-entity id="cam" camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
   <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
 </a-scene>
@@ -50,7 +50,8 @@
   const video = document.getElementById('video');
   const sphere = document.getElementById('sphere');
 
-  const VIDEO_URL = 'YOUR_DIRECT_DROPBOX_URL.mp4'; // dl.dropboxusercontent.com ... &raw=1
+  // Your Dropbox direct-play URL
+  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/utgpd1pjcu0up53r1ptr8/preview.mp4?rlkey=dqkeowyhp2voxe7wxkvbeo5ar&st=tvsj40te&raw=1';
 
   async function ensureMotionPermission() {
     if (typeof DeviceMotionEvent !== 'undefined' &&
@@ -69,35 +70,30 @@
 
     await ensureMotionPermission();
 
-    // 1) Set src only now (user gesture) to satisfy iOS autoplay
     try {
+      // Set src only now (user gesture) then prime playback
       if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
-
-      // 2) Prime playback BEFORE binding as material
       await video.play().catch(()=>{});
 
-      // 3) Bind to sphere after playback has started
+      // Bind to sphere AFTER playback has started
       sphere.setAttribute('material', 'src', '#video');
 
-      // 4) Try to enter VR (Cardboard split on iOS)
+      // Try to enter VR (Cardboard split on iOS Safari)
       try {
         await scene.enterVR();
       } catch (e) {
-        // If blocked, at least go fullscreen so user can pan
+        // Fallback to fullscreen so user can still look around
         enterFullscreen(scene);
       }
     } catch (err) {
       console.warn('Playback/VR error:', err);
-      // Fallback: still attach material; user can tap play controls if Safari shows them
       sphere.setAttribute('material', 'src', '#video');
       enterFullscreen(scene);
     }
 
-    // Re-enable button in case user exits VR and wants to try again
     setTimeout(()=>{ btn.disabled = false; }, 1500);
   });
 
-  // Extra resilience: if the video errors, log it
   video.addEventListener('error', () => {
     console.warn('Video error:', video.error);
   });
