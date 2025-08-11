@@ -39,14 +39,12 @@
   <div id="install-msg">📲 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
   <div id="countdown">Starting in 5...</div>
 
-  <!-- Optional fallback inline player -->
   <div id="fallback">
     <button id="play-inline">Play Inline (non-VR)</button>
   </div>
 
   <a-scene embedded vr-mode-ui="enabled: true" id="scene">
     <a-assets timeout="20000">
-      <!-- Your Dropbox direct-play link -->
       <video
         id="video"
         preload="auto"
@@ -55,23 +53,19 @@
         playsinline
         webkit-playsinline
         crossorigin="anonymous">
-        <source src="https://dl.dropboxusercontent.com/scl/fi/kbxfu75stakwnuwns7reo/3600_row_videos_20250808210212.mp4?rlkey=lu6wuirqqwkatz4wxyxttnqtn&st=zmrtnkc3&raw=1" type="video/mp4" />
+        <source src="https://dl.dropboxusercontent.com/scl/fi/a6mktri2u187ya6wcnq8z/clideo_editor_124121b74ba74e50b95961f75b2f5fcc.mp4?rlkey=9umigq40v4hz37gixyg8jqvml&st=ild7t2fl&raw=1" type="video/mp4" />
       </video>
-
-      <!-- 1-second silent audio to satisfy mobile autoplay + keep device awake-ish -->
       <audio id="silent-audio" autoplay loop>
         <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg" />
       </audio>
     </a-assets>
-
     <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
     <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
   </a-scene>
 
   <script>
-    // Elements
-    const button = document.getElementById('enter-vr-btn');
-    const installMsg = document.getElementById('install-msg');
+    const btn = document.getElementById('enter-vr-btn');
+    const msg = document.getElementById('install-msg');
     const scene = document.getElementById('scene');
     const video = document.getElementById('video');
     const audio = document.getElementById('silent-audio');
@@ -79,24 +73,19 @@
     const fallback = document.getElementById('fallback');
     const playInlineBtn = document.getElementById('play-inline');
 
-    // Hide install tip if dismissed before
-    if (localStorage.getItem('installPromptDismissed')) {
-      installMsg.style.display = 'none';
-    }
-    installMsg.addEventListener('click', () => {
-      installMsg.style.display = 'none';
+    if (localStorage.getItem('installPromptDismissed')) msg.style.display = 'none';
+    msg.addEventListener('click', () => {
+      msg.style.display = 'none';
       localStorage.setItem('installPromptDismissed', '1');
     });
 
-    // Helper: request motion permission (iOS)
     async function requestMotionPermission() {
       if (typeof DeviceMotionEvent !== 'undefined' &&
           typeof DeviceMotionEvent.requestPermission === 'function') {
-        try { await DeviceMotionEvent.requestPermission(); } catch(e) { /* ignore */ }
+        try { await DeviceMotionEvent.requestPermission(); } catch(e) {}
       }
     }
 
-    // Helper: try wake lock (non-critical)
     let wakeLock = null;
     async function lockScreen() {
       try {
@@ -108,39 +97,29 @@
             }
           });
         }
-      } catch(e) { /* ignore */ }
+      } catch(e) {}
     }
 
-    // Start VR playback
-    button.addEventListener('click', async () => {
-      button.style.display = 'none';
+    btn.addEventListener('click', async () => {
+      btn.style.display = 'none';
       countdown.style.display = 'block';
-
       await requestMotionPermission();
 
-      // Start silent audio to satisfy autoplay on mobile
-      try { await audio.play(); } catch (e) {}
+      try { await audio.play(); } catch {}
 
-      // Prime video (autoplay requires user gesture; we’re inside click)
-      try { await video.play(); } catch (e) {
-        // If it fails, show fallback inline button
+      try {
+        await video.play();
+      } catch (e) {
         fallback.style.display = 'block';
       }
 
-      // Enter fullscreen to reduce UI chrome
       const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
-      try { fs && fs.call(scene); } catch (e) {}
+      try { fs && fs.call(scene); } catch {}
 
-      // Reveal scene
       scene.style.display = 'block';
-
-      // Force a resize shortly after showing scene to fix WebGL sizing on some mobiles
       setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
-
-      // Optional wake lock
       lockScreen();
 
-      // Visual countdown
       let t = 5;
       countdown.innerText = `Starting in ${t}...`;
       const timer = setInterval(() => {
@@ -154,17 +133,13 @@
       }, 1000);
     });
 
-    // Fallback: inline (non-VR) playback if autoplay fails
     playInlineBtn.addEventListener('click', async () => {
       try { await video.play(); } catch(e) {}
       fallback.style.display = 'none';
       scene.style.display = 'block';
     });
 
-    // Basic error logging
-    video.addEventListener('error', () => {
-      console.warn('Video error:', video.error);
-    });
+    video.addEventListener('error', () => console.warn('Video error:', video.error));
   </script>
 </body>
 </html>
