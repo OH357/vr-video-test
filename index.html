@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 (Tap to Enter)</title>
+  <title>VR 360 (Local Video)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
@@ -31,16 +31,15 @@
 </a-scene>
 
 <!-- Hidden video we bind after user tap -->
-<video id="video" style="display:none" loop muted playsinline webkit-playsinline></video>
+<video id="video" style="display:none" loop muted playsinline webkit-playsinline>
+  <source src="./video.mp4" type="video/mp4" />
+</video>
 
 <script>
   const btn = document.getElementById('enter');
   const scene = document.getElementById('scene');
   const sphere = document.getElementById('sphere');
   const video = document.getElementById('video');
-
-  // Your Dropbox direct-play link (share -> dl.dropboxusercontent + &raw=1)
-  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/6u3tpz2lokfk1lrvlwgvj/preview_1.mp4?rlkey=chz7j4hvr9p3qw7hkvy3xdu4z&st=9610al2q&raw=1';
 
   async function motionPerm(){
     if (typeof DeviceMotionEvent !== 'undefined' &&
@@ -59,8 +58,6 @@
     await motionPerm();
 
     try {
-      if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
-
       // Start playback (user gesture) then bind as texture
       await video.play().catch(()=>{});
       sphere.setAttribute('material', 'shader: flat; src: #video');
@@ -73,7 +70,6 @@
     }
   });
 
-  // Optional: quick error log
   video.addEventListener('error', () => console.warn('Video error:', video.error));
 </script>
 </body>
