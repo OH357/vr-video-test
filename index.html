@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>VR 360 (Tap to Enter)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
@@ -39,8 +39,8 @@
   const sphere = document.getElementById('sphere');
   const video = document.getElementById('video');
 
-  // New direct-play link (Dropbox share -> raw)
-  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/wlj2mp0nsm93applhnwvc/preview_1.mov?rlkey=4d2i7miokqre69o31so60wttt&st=sm5gkez5&raw=1';
+  // Your Dropbox direct-play link (share -> dl.dropboxusercontent + &raw=1)
+  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/6u3tpz2lokfk1lrvlwgvj/preview_1.mp4?rlkey=chz7j4hvr9p3qw7hkvy3xdu4z&st=9610al2q&raw=1';
 
   async function motionPerm(){
     if (typeof DeviceMotionEvent !== 'undefined' &&
@@ -60,11 +60,12 @@
 
     try {
       if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
+
       // Start playback (user gesture) then bind as texture
       await video.play().catch(()=>{});
       sphere.setAttribute('material', 'shader: flat; src: #video');
 
-      // Try VR split (Cardboard on iOS)
+      // Try VR split (Cardboard on iOS). Fallback: fullscreen.
       try { await scene.enterVR(); }
       catch (e) { enterFullscreen(scene); }
     } finally {
@@ -72,9 +73,8 @@
     }
   });
 
-  video.addEventListener('error', () => {
-    console.warn('Video error:', video.error);
-  });
+  // Optional: quick error log
+  video.addEventListener('error', () => console.warn('Video error:', video.error));
 </script>
 </body>
 </html>
