@@ -2,43 +2,46 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 (iOS-friendly)</title>
+  <title>VR 360 (Mono → Split)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- Stereo helper (only needed if your video is left-right or top-bottom) -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe-stereo-component@0.6.0/dist/aframe-stereo-component.min.js"></script>
   <style>
     html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
-    /* IMPORTANT: do NOT hide the scene at load; let A-Frame create its VR button */
+    /* Do NOT hide the scene; iOS needs it visible to create the VR button */
     a-scene { width:100%; height:100%; }
-    #manualVR {
-      position: absolute; bottom: 24px; left: 24px; z-index: 1000;
-      padding: 12px 16px; border-radius: 10px; border: 0; cursor: pointer;
+    #forceVR {
+      position: absolute; right: 16px; bottom: 16px; z-index: 1000;
+      padding: 12px 16px; border: 0; border-radius: 10px; cursor: pointer;
       background: #ff5500; color: #fff; font-size: 16px;
       box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    }
+    #hint {
+      position: absolute; left: 16px; bottom: 16px; z-index: 999; color:#fff; opacity:.7; font: 14px/1.3 system-ui, sans-serif;
+      max-width: 55%;
     }
   </style>
 </head>
 <body>
 
-  <!-- Optional manual button (works even if A-Frame’s default VR button doesn’t appear) -->
-  <button id="manualVR">Enter VR</button>
+  <!-- Manual fallback button: forces split-screen/Cardboard -->
+  <button id="forceVR">Enter VR</button>
+  <div id="hint">If the headset icon doesn’t show, tap “Enter VR”. Make sure iOS Settings → Safari → Motion & Orientation Access = ON.</div>
 
-  <a-scene id="scene" vr-mode-ui="enabled: true">
+  <a-scene
+    id="scene"
+    vr-mode-ui="enabled: true; enterVRButton: true"
+    renderer="antialias: true; xrCompatible: true">
+
     <a-assets timeout="20000">
-      <!-- Replace with your Dropbox *direct* link (dl.dropboxusercontent.com ... &raw=1) -->
-      <video id="video"
-             preload="auto"
-             loop
-             muted
-             playsinline
-             webkit-playsinline
-             crossorigin="anonymous">
-        <source src="YOUR_DIRECT_DROPBOX_URL.mp4" type="video/mp4" />
+      <!-- PUT YOUR DIRECT DROPBOX URL BELOW -->
+      <video id="video" preload="auto" loop muted playsinline webkit-playsinline crossorigin="anonymous">
+        <source src="YOUR_DIRECT_DROPBOX_URL.mp4" type="video/mp4">
       </video>
     </a-assets>
 
-    <!-- If your video is stereo L/R, add stereo="left-right". For mono, remove the stereo attribute. -->
+    <!-- Mono video → shown to BOTH eyes in VR (split screen) -->
     <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
     <a-entity camera look-controls="magicWindowTrackingEnabled: true"></a-entity>
   </a-scene>
@@ -46,9 +49,8 @@
   <script>
     const scene = document.getElementById('scene');
     const video = document.getElementById('video');
-    const manualVR = document.getElementById('manualVR');
+    const forceBtn = document.getElementById('forceVR');
 
-    // iOS motion permission (needed for proper head tracking)
     async function ensureMotionPermission() {
       if (typeof DeviceMotionEvent !== 'undefined' &&
           typeof DeviceMotionEvent.requestPermission === 'function') {
@@ -56,29 +58,35 @@
       }
     }
 
-    // Autoplay kick (muted + user gesture on iOS)
     async function primeVideo() {
-      try { await video.play(); } catch (e) { /* ignore */ }
+      try { await video.play(); } catch (e) {}
     }
 
-    // Show A-Frame’s VR button as soon as scene is ready
-    scene.addEventListener('loaded', () => {
-      // If your page is in an iframe on iOS, make sure the iframe has:
-      // allow="fullscreen; xr; vr; accelerometer; gyroscope"
-    });
-
-    // If user taps A-Frame’s built-in VR button
+    // When the built-in VR button is used
     scene.addEventListener('enter-vr', async () => {
       await ensureMotionPermission();
       await primeVideo();
     });
 
-    // Manual fallback button that forces VR/cardboard
-    manualVR.addEventListener('click', async () => {
+    // Manual fallback that forces Cardboard split-screen even on iOS
+    forceBtn.addEventListener('click', async () => {
       await ensureMotionPermission();
       await primeVideo();
-      try { await scene.enterVR(); } catch (e) { /* ignore */ }
+
+      // Try A-Frame’s VR first
+      try {
+        // In many iPhones Safari, this triggers Cardboard (split) even w/o immersive WebXR
+        await scene.enterVR();
+      } catch (e) {
+        // If still blocked, try fullscreen as a last resort (lets you look around)
+        const el = scene;
+        const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        try { fs && fs.call(el); } catch (_) {}
+      }
     });
+
+    // Extra: if page is in an iframe, that iframe must allow sensors/fullscreen
+    // <iframe allow="fullscreen; xr; vr; accelerometer; gyroscope"></iframe>
   </script>
 </body>
 </html>
