@@ -1,36 +1,84 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>Forced Stereo VR 360</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-stereo-component@0.6.0/dist/aframe-stereo-component.min.js"></script>
-    <style>
-      html, body { margin:0; height:100%; background:#000; }
-    </style>
-  </head>
-  <body>
-    <a-scene vr-mode-ui="enabled: true" embedded>
-      <a-assets>
-        <!-- STEREO side-by-side video -->
-        <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
-          <source src="https://dl.dropboxusercontent.com/scl/fi/utgpd1pjcu0up53r1ptr8/preview.mp4?rlkey=dqkeowyhp2voxe7wxkvbeo5ar&st=tvsj40te&raw=1" type="video/mp4">
-        </video>
-      </a-assets>
+<head>
+  <meta charset="utf-8" />
+  <title>VR 360 (iOS-friendly)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- Stereo helper (only needed if your video is left-right or top-bottom) -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe-stereo-component@0.6.0/dist/aframe-stereo-component.min.js"></script>
+  <style>
+    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
+    /* IMPORTANT: do NOT hide the scene at load; let A-Frame create its VR button */
+    a-scene { width:100%; height:100%; }
+    #manualVR {
+      position: absolute; bottom: 24px; left: 24px; z-index: 1000;
+      padding: 12px 16px; border-radius: 10px; border: 0; cursor: pointer;
+      background: #ff5500; color: #fff; font-size: 16px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    }
+  </style>
+</head>
+<body>
 
-      <!-- Force stereo playback -->
-      <a-videosphere src="#video" rotation="0 -90 0" stereo="left-right"></a-videosphere>
-      <a-entity camera look-controls></a-entity>
-    </a-scene>
+  <!-- Optional manual button (works even if A-Frame’s default VR button doesn’t appear) -->
+  <button id="manualVR">Enter VR</button>
 
-    <script>
-      // iOS motion permission
-      document.querySelector('a-scene').addEventListener('enter-vr', async () => {
-        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-          try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
-        }
-      });
-    </script>
-  </body>
+  <a-scene id="scene" vr-mode-ui="enabled: true">
+    <a-assets timeout="20000">
+      <!-- Replace with your Dropbox *direct* link (dl.dropboxusercontent.com ... &raw=1) -->
+      <video id="video"
+             preload="auto"
+             loop
+             muted
+             playsinline
+             webkit-playsinline
+             crossorigin="anonymous">
+        <source src="YOUR_DIRECT_DROPBOX_URL.mp4" type="video/mp4" />
+      </video>
+    </a-assets>
+
+    <!-- If your video is stereo L/R, add stereo="left-right". For mono, remove the stereo attribute. -->
+    <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
+    <a-entity camera look-controls="magicWindowTrackingEnabled: true"></a-entity>
+  </a-scene>
+
+  <script>
+    const scene = document.getElementById('scene');
+    const video = document.getElementById('video');
+    const manualVR = document.getElementById('manualVR');
+
+    // iOS motion permission (needed for proper head tracking)
+    async function ensureMotionPermission() {
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
+      }
+    }
+
+    // Autoplay kick (muted + user gesture on iOS)
+    async function primeVideo() {
+      try { await video.play(); } catch (e) { /* ignore */ }
+    }
+
+    // Show A-Frame’s VR button as soon as scene is ready
+    scene.addEventListener('loaded', () => {
+      // If your page is in an iframe on iOS, make sure the iframe has:
+      // allow="fullscreen; xr; vr; accelerometer; gyroscope"
+    });
+
+    // If user taps A-Frame’s built-in VR button
+    scene.addEventListener('enter-vr', async () => {
+      await ensureMotionPermission();
+      await primeVideo();
+    });
+
+    // Manual fallback button that forces VR/cardboard
+    manualVR.addEventListener('click', async () => {
+      await ensureMotionPermission();
+      await primeVideo();
+      try { await scene.enterVR(); } catch (e) { /* ignore */ }
+    });
+  </script>
+</body>
 </html>
