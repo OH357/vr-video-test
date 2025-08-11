@@ -1,81 +1,175 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 (Dropbox Direct Link)</title>
+  <title>VR 360 – Cardboard Fallback (iOS-friendly)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
-    a-scene { width:100%; height:100%; }
-    #enter {
-      position:absolute; left:50%; top:50%; transform:translate(-50%, -50%);
-      padding:16px 22px; border:0; border-radius:12px; background:#ff5500; color:#fff;
-      font:600 16px/1.2 system-ui, sans-serif; z-index:1000; box-shadow:0 6px 20px rgba(0,0,0,.35);
-    }
-    #hint {
-      position:absolute; left:12px; bottom:12px; color:#fff; opacity:.8; z-index:999;
-      font:14px/1.4 system-ui, sans-serif; max-width:70%;
-    }
+    html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,Segoe UI,Arial,sans-serif}
+    #ui{position:fixed;z-index:10;left:12px;right:12px;top:12px;color:#fff}
+    #row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    button{padding:10px 14px;border:0;border-radius:10px;background:#ff5500;color:#fff;cursor:pointer}
+    #log{white-space:pre-wrap;font-size:12px;opacity:.85;margin-top:8px}
+    canvas{display:block;width:100vw;height:100vh}
+    #divider{position:fixed;z-index:5;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.25);pointer-events:none}
+    #hint{opacity:.8;font-size:13px;margin-top:6px}
   </style>
 </head>
 <body>
+  <div id="ui">
+    <div><b>Steps:</b> 1) Tap <b>Load Video</b> → 2) Tap <b>Cardboard (Split)</b> → 3) Insert phone in viewer.</div>
+    <div id="row">
+      <button id="load">Load Video</button>
+      <button id="cardboard" disabled>Cardboard (Split)</button>
+      <button id="fullscreen" disabled>Fullscreen</button>
+    </div>
+    <div id="hint">iPhone: Settings → Safari → <b>Motion & Orientation Access</b> = ON.</div>
+    <div id="log"></div>
+  </div>
+  <div id="divider" hidden></div>
 
-<button id="enter">Enter VR</button>
-<div id="hint">If nothing happens on iPhone: Settings → Safari → Motion & Orientation Access = ON.</div>
+  <!-- Hidden <video>; we texture it onto a sphere -->
+  <video id="video" muted playsinline webkit-playsinline preload="metadata" style="display:none"></video>
 
-<a-scene id="scene" renderer="antialias:true; xrCompatible:true" vr-mode-ui="enabled:true" loading-screen="enabled:false">
-  <a-entity camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
-  <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
-</a-scene>
+  <!-- Three.js -->
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/examples/js/controls/DeviceOrientationControls.js"></script>
 
-<!-- We create the video element empty and set src on tap (iOS policy) -->
-<video id="video" style="display:none" loop muted playsinline webkit-playsinline crossorigin="anonymous"></video>
+  <script>
+    const logEl = document.getElementById('log');
+    const btnLoad = document.getElementById('load');
+    const btnCardboard = document.getElementById('cardboard');
+    const btnFullscreen = document.getElementById('fullscreen');
+    const divider = document.getElementById('divider');
+    const vid = document.getElementById('video');
 
-<script>
-  const btn    = document.getElementById('enter');
-  const scene  = document.getElementById('scene');
-  const sphere = document.getElementById('sphere');
-  const video  = document.getElementById('video');
+    // ====== SET YOUR VIDEO URL HERE ======
+    // Best: same-origin (e.g., ./vr_360_video.mp4 next to this file).
+    // If you MUST use Dropbox, convert to the raw endpoint, but iOS may black-screen due to CORS:
+    // const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/qk3mypjauxppashndes61/vr_360_video.mp4?rlkey=4ycqo8efz90kffgbnylf748ur&st=29yzz4lo&raw=1';
+    const VIDEO_URL = './vr_360_video.mp4';
+    // =====================================
 
-  // Your Dropbox link, converted to the direct (raw) endpoint
-  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/qk3mypjauxppashndes61/vr_360_video.mp4?rlkey=4ycqo8efz90kffgbnylf748ur&st=29yzz4lo&raw=1';
+    function log(...a){ console.log(...a); logEl.textContent += a.join(' ') + '\n'; }
 
-  async function motionPerm(){
-    if (typeof DeviceMotionEvent !== 'undefined' &&
-        typeof DeviceMotionEvent.requestPermission === 'function') {
-      try { await DeviceMotionEvent.requestPermission(); } catch(e){}
+    // Scene setup
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, preserveDrawingBuffer:false });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    camera.position.set(0,0,0.1); // inside sphere
+    const controls = new THREE.DeviceOrientationControls(camera);
+
+    // 360 sphere (inverted)
+    const geometry = new THREE.SphereGeometry(500, 64, 64);
+    geometry.scale(-1, 1, 1);
+
+    // Video texture (created after user gesture)
+    let texture, material, mesh, ready = false, running = false, splitMode = false;
+
+    function resize(){
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = 0.5 * w / h; // per-eye aspect in split mode
+      if (!splitMode) camera.aspect = w / h;
+      camera.updateProjectionMatrix();
     }
-  }
+    window.addEventListener('resize', resize);
 
-  function enterFullscreen(el){
-    const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    try { fs && fs.call(el); } catch(e){}
-  }
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    await motionPerm();
-
-    try {
-      // Set src only on user gesture, then start playback
-      if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
-      await video.play().catch(()=>{});
-
-      // Bind to the sphere after playback starts (more reliable on iOS)
-      sphere.setAttribute('material', 'shader: flat; src: #video');
-
-      // Try VR split (Cardboard on iOS). Fallback: fullscreen.
-      try { await scene.enterVR(); }
-      catch (e) { enterFullscreen(scene); }
-    } finally {
-      setTimeout(()=>{ btn.disabled = false; }, 1200);
+    async function requestMotionPermission(){
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        try { await DeviceMotionEvent.requestPermission(); log('Motion permission granted'); }
+        catch(e){ log('Motion permission denied'); }
+      }
     }
-  });
 
-  // Optional: log errors to console
-  video.addEventListener('error', () => console.warn('Video error:', video.error));
-</script>
+    function enterFullscreen(el){
+      const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      try { fs && fs.call(el); } catch(e) { /* ignore */ }
+    }
+
+    // Render loop with optional split-screen
+    function animate(){
+      if (!running) return;
+      requestAnimationFrame(animate);
+      controls.update();
+
+      if (splitMode){
+        const w = renderer.domElement.width;
+        const h = renderer.domElement.height;
+        // Left eye (mono)
+        renderer.setScissorTest(true);
+        renderer.setViewport(0, 0, w/2, h);
+        renderer.setScissor(0, 0, w/2, h);
+        renderer.render(scene, camera);
+        // Right eye (same view)
+        renderer.setViewport(w/2, 0, w/2, h);
+        renderer.setScissor(w/2, 0, w/2, h);
+        renderer.render(scene, camera);
+        renderer.setScissorTest(false);
+      } else {
+        renderer.render(scene, camera);
+      }
+    }
+
+    // Buttons
+    btnLoad.addEventListener('click', async () => {
+      btnLoad.disabled = true;
+
+      await requestMotionPermission();
+
+      try {
+        // Set source only on user gesture (iOS policy)
+        vid.crossOrigin = 'anonymous'; // harmless on same-origin; needed for CORS-friendly hosts
+        vid.src = VIDEO_URL;
+
+        // Try to play
+        await vid.play();
+        log('Video playing');
+
+        // Create / update texture & mesh
+        texture = new THREE.VideoTexture(vid);
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.format = THREE.RGBFormat;
+
+        material = new THREE.MeshBasicMaterial({ map: texture });
+        mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        ready = true;
+        btnCardboard.disabled = false;
+        btnFullscreen.disabled = false;
+
+        resize();
+        if (!running){ running = true; animate(); }
+
+      } catch(e){
+        log('Video play error (check codec or hosting/CORS):', e && e.message ? e.message : e);
+        btnLoad.disabled = false;
+      }
+    });
+
+    btnCardboard.addEventListener('click', async () => {
+      if (!ready) return;
+      splitMode = true;
+      divider.hidden = false;
+      resize();
+      // Go fullscreen for headset
+      enterFullscreen(document.documentElement);
+    });
+
+    btnFullscreen.addEventListener('click', () => {
+      enterFullscreen(document.documentElement);
+    });
+
+    // Log video errors
+    vid.addEventListener('error', () => log('Video error:', (vid.error && vid.error.message) || vid.error || 'unknown'));
+
+  </script>
 </body>
 </html>
