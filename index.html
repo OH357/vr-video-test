@@ -39,14 +39,12 @@
   <div id="install-msg">📲 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
   <div id="countdown">Starting in 5...</div>
 
-  <!-- Optional fallback inline player -->
   <div id="fallback">
     <button id="play-inline">Play Inline (non-VR)</button>
   </div>
 
   <a-scene embedded vr-mode-ui="enabled: true" id="scene">
     <a-assets timeout="20000">
-      <!-- Updated Dropbox direct-play link -->
       <video
         id="video"
         preload="auto"
@@ -55,10 +53,8 @@
         playsinline
         webkit-playsinline
         crossorigin="anonymous">
-        <source src="https://dl.dropboxusercontent.com/scl/fi/ohpkh880ahfxgnvdw5sao/preview_4_55_5_RIGHT_ONLY_auto_v1.8.5_LRF_Full_SBS.mp4?rlkey=su69hyusymj9lz0v1hysjvmd4&st=mk07wv92&raw=1" type="video/mp4" />
+        <source src="https://dl.dropboxusercontent.com/scl/fi/7s3xmq6qwgvfcd931da5i/preview_1_55_5_RIGHT_ONLY_auto_v1.8.5_LRF_Full_SBS.mp4?rlkey=p9vngmji5hoj79mhajbvf6kan&st=hqsk9z3p&raw=1" type="video/mp4" />
       </video>
-
-      <!-- 1-second silent audio to satisfy mobile autoplay + keep device awake-ish -->
       <audio id="silent-audio" autoplay loop>
         <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg" />
       </audio>
