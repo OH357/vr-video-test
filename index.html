@@ -2,101 +2,94 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 (iPhone Fix)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>VR 360 iPhone Debug/Fix</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+    html, body { margin:0; height:100%; background:#000; overflow:hidden; font-family: system-ui, sans-serif; }
     a-scene { width:100%; height:100%; }
-    #enter {
-      position:absolute; left:50%; top:50%; transform:translate(-50%, -50%);
-      padding:16px 22px; border:0; border-radius:12px; background:#ff5500; color:#fff;
-      font:600 16px/1.2 system-ui, sans-serif; z-index:1000; box-shadow:0 6px 20px rgba(0,0,0,.35);
-    }
-    #msg {
-      position:absolute; left:12px; bottom:12px; color:#fff; opacity:.8; z-index:999;
-      font: 14px/1.4 system-ui, sans-serif; max-width:70%;
-    }
+    #ui { position: absolute; z-index: 1000; left: 12px; top: 12px; right: 12px; color: #fff; }
+    #videoInline { width: 100%; max-height: 45vh; background:#000; }
+    #enterVR, #bind { padding:10px 14px; border:0; border-radius:10px; background:#ff5500; color:#fff; margin-top:8px; }
+    #log { white-space: pre-wrap; font-size: 12px; opacity:.85; margin-top:8px; }
   </style>
 </head>
 <body>
+  <div id="ui">
+    <div>Step 1: Tap ▶️ on the inline video. If it plays here, the URL/codec is OK.</div>
+    <video id="videoInline" controls playsinline webkit-playsinline muted preload="metadata"></video>
+    <div>
+      <button id="bind" disabled>Step 2: Bind to 360 Sphere</button>
+      <button id="enterVR" disabled>Step 3: Enter VR (split screen)</button>
+    </div>
+    <div id="log"></div>
+  </div>
 
-<button id="enter">Enter VR</button>
-<div id="msg">If nothing happens: iOS Settings → Safari → Motion & Orientation Access = ON.</div>
+  <a-scene id="scene" renderer="antialias:true; xrCompatible:true" loading-screen="enabled:false" vr-mode-ui="enabled:true">
+    <a-entity camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
+    <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
+  </a-scene>
 
-<a-scene id="scene"
-         renderer="antialias:true; xrCompatible:true"
-         vr-mode-ui="enabled:true"
-         loading-screen="enabled:false">
-  <!-- No <a-assets> to avoid the spinner; we bind video after a user tap -->
-  <a-entity id="cam" camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
-  <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
-</a-scene>
+  <script>
+    const VIDEO_URL = "https://dl.dropboxusercontent.com/scl/fi/utgpd1pjcu0up53r1ptr8/preview.mp4?rlkey=dqkeowyhp2voxe7wxkvbeo5ar&st=tvsj40te&raw=1";
 
-<!-- Hidden video element we control manually -->
-<video id="video"
-       style="display:none"
-       preload="metadata"
-       loop
-       muted
-       playsinline
-       webkit-playsinline>
-</video>
+    const logEl = document.getElementById('log');
+    const scene = document.getElementById('scene');
+    const sphere = document.getElementById('sphere');
+    const video = document.getElementById('videoInline');
+    const bindBtn = document.getElementById('bind');
+    const enterVRBtn = document.getElementById('enterVR');
 
-<script>
-  const btn = document.getElementById('enter');
-  const scene = document.getElementById('scene');
-  const video = document.getElementById('video');
-  const sphere = document.getElementById('sphere');
+    function log(...args){ console.log(...args); logEl.textContent += args.join(' ') + "\n"; }
 
-  // Your Dropbox direct-play URL
-  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/utgpd1pjcu0up53r1ptr8/preview.mp4?rlkey=dqkeowyhp2voxe7wxkvbeo5ar&st=tvsj40te&raw=1';
+    // Set source only now (helps some iOS policies)
+    video.crossOrigin = "anonymous"; // request CORS if server supports it
+    video.src = VIDEO_URL;
 
-  async function ensureMotionPermission() {
-    if (typeof DeviceMotionEvent !== 'undefined' &&
-        typeof DeviceMotionEvent.requestPermission === 'function') {
-      try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
-    }
-  }
+    video.addEventListener('loadedmetadata', () => log('loadedmetadata:', video.videoWidth+'x'+video.videoHeight));
+    video.addEventListener('canplay', () => log('canplay'));
+    video.addEventListener('playing', () => { log('playing'); bindBtn.disabled = false; });
+    video.addEventListener('error', () => log('video error code:', (video.error && video.error.code) || 'unknown'));
 
-  function enterFullscreen(el) {
-    const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    try { fs && fs.call(el); } catch(e) {}
-  }
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-
-    await ensureMotionPermission();
-
-    try {
-      // Set src only now (user gesture) then prime playback
-      if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
-      await video.play().catch(()=>{});
-
-      // Bind to sphere AFTER playback has started
-      sphere.setAttribute('material', 'src', '#video');
-
-      // Try to enter VR (Cardboard split on iOS Safari)
-      try {
-        await scene.enterVR();
-      } catch (e) {
-        // Fallback to fullscreen so user can still look around
-        enterFullscreen(scene);
+    async function ensureMotionPermission() {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        try { await DeviceMotionEvent.requestPermission(); log('Motion permission granted'); } catch(e){ log('Motion permission denied', e); }
       }
-    } catch (err) {
-      console.warn('Playback/VR error:', err);
-      sphere.setAttribute('material', 'src', '#video');
-      enterFullscreen(scene);
     }
 
-    setTimeout(()=>{ btn.disabled = false; }, 1500);
-  });
+    bindBtn.addEventListener('click', async () => {
+      // Hide the UI after binding
+      try {
+        // IMPORTANT: attach the same <video> element to the sphere material
+        sphere.setAttribute('material', { src: '#videoInline' });
 
-  video.addEventListener('error', () => {
-    console.warn('Video error:', video.error);
-  });
-</script>
+        // If CORS is not allowed by Dropbox, WebGL will "taint" and sphere may remain black.
+        // This proves a CORS/texture issue if inline video plays but sphere stays blank.
+        log('Bound video to sphere material');
+        enterVRBtn.disabled = false;
+
+        // Optionally hide the inline player now (uncomment if you want)
+        // document.getElementById('ui').style.display = 'none';
+      } catch (e) {
+        log('Bind error:', e);
+      }
+    });
+
+    enterVRBtn.addEventListener('click', async () => {
+      await ensureMotionPermission();
+      try {
+        // Make sure video is playing (iOS requires a gesture before .play)
+        await video.play().catch(()=>{});
+        await scene.enterVR();
+        log('Requested enterVR');
+      } catch (e) {
+        log('enterVR error:', e);
+        // Fallback: fullscreen so user can still pan around
+        const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
+        try { fs && fs.call(scene); log('Entered fullscreen fallback'); } catch(_) {}
+      }
+    });
+  </script>
 </body>
 </html>
