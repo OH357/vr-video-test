@@ -6,9 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- Only used on iOS fallback -->
-  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.158.0/examples/js/controls/DeviceOrientationControls.js"></script>
   <style>
     html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
     a-scene { width:100%; height:100%; display:none; }
@@ -28,11 +25,12 @@
       position:absolute; bottom:50%; left:50%; transform:translateX(-50%);
       color:#fff; font-size:2em; z-index:998; display:none; text-shadow:0 2px 8px #000;
     }
-    #fallback{ position:absolute; top:12px; left:12px; z-index:1001; display:none; }
-    #fallback button{ padding:10px 14px; border-radius:8px; border:none; cursor:pointer; }
-    /* iOS split-screen divider */
-    #divider{ position:fixed; z-index:5; top:0; bottom:0; left:50%; width:2px; background:rgba(255,255,255,.25); display:none; }
-    canvas { display:block; }
+    #fallback{
+      position:absolute; top:12px; left:12px; z-index:1001; display:none;
+    }
+    #fallback button{
+      padding:10px 14px; border-radius:8px; border:none; cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -40,12 +38,15 @@
   <button id="enter-vr-btn">🎥 Enter VR</button>
   <div id="install-msg">📲 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
   <div id="countdown">Starting in 5...</div>
-  <div id="fallback"><button id="play-inline">Play Inline (non-VR)</button></div>
-  <div id="divider"></div>
 
-  <!-- A-FRAME (Android/Desktop) -->
+  <!-- Optional fallback inline player -->
+  <div id="fallback">
+    <button id="play-inline">Play Inline (non-VR)</button>
+  </div>
+
   <a-scene embedded vr-mode-ui="enabled: true" id="scene">
     <a-assets timeout="20000">
+      <!-- Updated Dropbox direct-play link -->
       <video
         id="video"
         preload="auto"
@@ -54,22 +55,20 @@
         playsinline
         webkit-playsinline
         crossorigin="anonymous">
-        <!-- Your latest Dropbox link -->
-        <source src="https://dl.dropboxusercontent.com/scl/fi/qk3mypjauxppashndes61/vr_360_video.mp4?rlkey=4ycqo8efz90kffgbnylf748ur&st=29yzz4lo&raw=1" type="video/mp4" />
+        <source src="https://dl.dropboxusercontent.com/scl/fi/ohpkh880ahfxgnvdw5sao/preview_4_55_5_RIGHT_ONLY_auto_v1.8.5_LRF_Full_SBS.mp4?rlkey=su69hyusymj9lz0v1hysjvmd4&st=mk07wv92&raw=1" type="video/mp4" />
       </video>
+
+      <!-- 1-second silent audio to satisfy mobile autoplay + keep device awake-ish -->
       <audio id="silent-audio" autoplay loop>
         <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg" />
       </audio>
     </a-assets>
+
     <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
     <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
   </a-scene>
 
   <script>
-    // --- Device detection (simple iOS check)
-    const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-    // Shared elements
     const button = document.getElementById('enter-vr-btn');
     const installMsg = document.getElementById('install-msg');
     const scene = document.getElementById('scene');
@@ -78,10 +77,10 @@
     const countdown = document.getElementById('countdown');
     const fallback = document.getElementById('fallback');
     const playInlineBtn = document.getElementById('play-inline');
-    const divider = document.getElementById('divider');
 
-    // Hide install tip if dismissed before
-    if (localStorage.getItem('installPromptDismissed')) { installMsg.style.display = 'none'; }
+    if (localStorage.getItem('installPromptDismissed')) {
+      installMsg.style.display = 'none';
+    }
     installMsg.addEventListener('click', () => {
       installMsg.style.display = 'none';
       localStorage.setItem('installPromptDismissed', '1');
@@ -94,7 +93,6 @@
       }
     }
 
-    // Wake lock (non-critical)
     let wakeLock = null;
     async function lockScreen() {
       try {
@@ -109,102 +107,22 @@
       } catch(e) {}
     }
 
-    // ---- ANDROID / DESKTOP: regular A-Frame flow
-    async function startAFrame() {
+    button.addEventListener('click', async () => {
+      button.style.display = 'none';
+      countdown.style.display = 'block';
+
       await requestMotionPermission();
       try { await audio.play(); } catch (e) {}
-      try { await video.play(); } catch (e) { fallback.style.display = 'block'; }
+      try { await video.play(); } catch (e) {
+        fallback.style.display = 'block';
+      }
 
       const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
       try { fs && fs.call(scene); } catch (e) {}
       scene.style.display = 'block';
       setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
       lockScreen();
-      startCountdown();
-    }
 
-    // ---- iOS: force split left/right using Three.js “Cardboard fallback”
-    let renderer, threeScene, camera, controls, mesh, splitRunning = false;
-
-    function resizeIOS() {
-      const w = window.innerWidth, h = window.innerHeight;
-      renderer.setSize(w, h, false);
-      camera.aspect = (0.5 * w / h); // per-eye aspect
-      camera.updateProjectionMatrix();
-    }
-    function enterFullscreenIOS(el){
-      const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      try { fs && fs.call(el); } catch(e){}
-    }
-    function animateIOS() {
-      if (!splitRunning) return;
-      requestAnimationFrame(animateIOS);
-      controls.update();
-
-      const w = renderer.domElement.width, h = renderer.domElement.height;
-      renderer.setScissorTest(true);
-      // Left eye
-      renderer.setViewport(0, 0, w/2, h);
-      renderer.setScissor(0, 0, w/2, h);
-      renderer.render(threeScene, camera);
-      // Right eye (duplicate)
-      renderer.setViewport(w/2, 0, w/2, h);
-      renderer.setScissor(w/2, 0, w/2, h);
-      renderer.render(threeScene, camera);
-      renderer.setScissorTest(false);
-    }
-
-    async function startIOS() {
-      await requestMotionPermission();
-
-      // Try to start silent audio (keeps device awake-ish)
-      try { await audio.play(); } catch(e) {}
-
-      // Start the video via user gesture
-      try { await video.play(); } catch(e) { fallback.style.display = 'block'; return; }
-
-      // Build Three.js scene reusing the same <video> as texture
-      renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-      renderer.setPixelRatio(window.devicePixelRatio || 1);
-      document.body.appendChild(renderer.domElement);
-
-      threeScene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, 0.5, 0.1, 1000);
-      camera.position.set(0,0,0.1);
-      controls = new THREE.DeviceOrientationControls(camera);
-
-      const geo = new THREE.SphereGeometry(500, 64, 64);
-      geo.scale(-1, 1, 1);
-
-      const tex = new THREE.VideoTexture(video);
-      tex.minFilter = THREE.LinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      tex.format = THREE.RGBFormat;
-
-      const mat = new THREE.MeshBasicMaterial({ map: tex });
-      mesh = new THREE.Mesh(geo, mat);
-      threeScene.add(mesh);
-
-      // Fullscreen + split divider
-      const root = document.documentElement;
-      enterFullscreenIOS(root);
-      divider.style.display = 'block';
-
-      // Hide A-Frame scene (we're not using it on iOS)
-      scene.style.display = 'none';
-
-      // Start render loop
-      splitRunning = true;
-      window.addEventListener('resize', resizeIOS);
-      resizeIOS();
-      animateIOS();
-      lockScreen();
-      startCountdown();
-    }
-
-    function startCountdown(){
-      button.style.display = 'none';
-      countdown.style.display = 'block';
       let t = 5;
       countdown.innerText = `Starting in ${t}...`;
       const timer = setInterval(() => {
@@ -216,32 +134,17 @@
           countdown.innerText = `Starting in ${t}...`;
         }
       }, 1000);
-    }
-
-    // Entry point
-    button.addEventListener('click', async () => {
-      if (isiOS) {
-        await startIOS();
-      } else {
-        await startAFrame();
-      }
     });
 
-    // Inline fallback
     playInlineBtn.addEventListener('click', async () => {
       try { await video.play(); } catch(e) {}
       fallback.style.display = 'none';
-      // On iOS fallback, show the video element directly
-      if (isiOS) {
-        video.style.display = 'block';
-        video.controls = true;
-      } else {
-        scene.style.display = 'block';
-      }
+      scene.style.display = 'block';
     });
 
-    // Log video errors
-    video.addEventListener('error', () => { console.warn('Video error:', video.error); });
+    video.addEventListener('error', () => {
+      console.warn('Video error:', video.error);
+    });
   </script>
 </body>
 </html>
