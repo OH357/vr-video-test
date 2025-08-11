@@ -1,296 +1,81 @@
-
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>360 Cardboard Web Player (iOS)</title>
+  <title>VR 360 (Dropbox Direct Link)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    html,body { height:100%; margin:0; background:#000; color:#fff; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; }
-    #ui {
-      position: absolute; left: 12px; top: 12px; z-index: 10;
-      display:flex; gap:8px; flex-wrap:wrap; align-items:center;
-      backdrop-filter: blur(6px); background: rgba(0,0,0,0.35);
-      padding:8px; border-radius:8px;
+    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+    a-scene { width:100%; height:100%; }
+    #enter {
+      position:absolute; left:50%; top:50%; transform:translate(-50%, -50%);
+      padding:16px 22px; border:0; border-radius:12px; background:#ff5500; color:#fff;
+      font:600 16px/1.2 system-ui, sans-serif; z-index:1000; box-shadow:0 6px 20px rgba(0,0,0,.35);
     }
-    button, input { font-size:14px; padding:8px 10px; border-radius:6px; border: none; }
-    button { background: #1e90ff; color: white; }
-    input[type="range"] { width:120px; }
-    #hint { position: absolute; left: 12px; bottom: 12px; z-index:10; font-size:13px; opacity:0.9; }
-    canvas { display:block; width:100vw; height:100vh; }
+    #hint {
+      position:absolute; left:12px; bottom:12px; color:#fff; opacity:.8; z-index:999;
+      font:14px/1.4 system-ui, sans-serif; max-width:70%;
+    }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <button id="startBtn">Tap to Start</button>
-    <button id="recenterBtn">Recenter</button>
-    <label>IPD <input id="ipd" type="range" min="0" max="0.08" step="0.001" value="0.064"></label>
-    <label>FOV <input id="fov" type="range" min="60" max="110" step="1" value="90"></label>
-    <select id="videoSelect">
-      <option value="360sample.mp4">Bundle: 360sample.mp4</option>
-      <option value="">(or paste URL below)</option>
-    </select>
-    <input id="videoUrl" type="text" placeholder="Optional video URL (HLS ok)" style="width:220px;" />
-    <button id="loadUrl">Load URL</button>
-  </div>
 
-  <div id="hint">Tip: Put phone in Cardboard and look around. If orientation doesn't move, press Recenter and allow Motion permission (iOS).</div>
+<button id="enter">Enter VR</button>
+<div id="hint">If nothing happens on iPhone: Settings → Safari → Motion & Orientation Access = ON.</div>
 
-  <!-- Three.js as ES module from unpkg (version pinned for stability) -->
-  <script type="module">
-  import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
-  import { DeviceOrientationControls } from 'https://unpkg.com/three@0.158.0/examples/jsm/controls/DeviceOrientationControls.js';
+<a-scene id="scene" renderer="antialias:true; xrCompatible:true" vr-mode-ui="enabled:true" loading-screen="enabled:false">
+  <a-entity camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
+  <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
+</a-scene>
 
-  // ---- Basic app state ----
-  const startBtn = document.getElementById('startBtn');
-  const recenterBtn = document.getElementById('recenterBtn');
-  const ipdSlider = document.getElementById('ipd');
-  const fovSlider = document.getElementById('fov');
-  const videoSelect = document.getElementById('videoSelect');
-  const videoUrlInput = document.getElementById('videoUrl');
-  const loadUrlBtn = document.getElementById('loadUrl');
+<!-- We create the video element empty and set src on tap (iOS policy) -->
+<video id="video" style="display:none" loop muted playsinline webkit-playsinline crossorigin="anonymous"></video>
 
-  let renderer, scene, leftCamera, rightCamera, video, videoTexture, sphere;
-  let controls; // DeviceOrientationControls
-  let referenceQuaternion = null;
+<script>
+  const btn    = document.getElementById('enter');
+  const scene  = document.getElementById('scene');
+  const sphere = document.getElementById('sphere');
+  const video  = document.getElementById('video');
 
-  const canvasContainer = document.body;
+  // Your Dropbox link, converted to the direct (raw) endpoint
+  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/qk3mypjauxppashndes61/vr_360_video.mp4?rlkey=4ycqo8efz90kffgbnylf748ur&st=29yzz4lo&raw=1';
 
-  // renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.autoClear = false;          // we'll manually clear between eyes
-  document.body.appendChild(renderer.domElement);
-
-  // scene
-  scene = new THREE.Scene();
-
-  // build sphere that you view from inside
-  const sphereGeo = new THREE.SphereBufferGeometry(500, 64, 32);
-  // flip inside (render back side) so texture is visible from inside
-  const sphereMat = new THREE.MeshBasicMaterial({ side: THREE.BackSide });
-  sphere = new THREE.Mesh(sphereGeo, sphereMat);
-  scene.add(sphere);
-
-  // 2 cameras for stereo
-  leftCamera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 2000);
-  rightCamera = leftCamera.clone();
-
-  // start UI interactions
-  startBtn.addEventListener('click', async () => {
-    startBtn.disabled = true;
-    await requestIOSMotionPermissionIfNeeded();
-    await ensureVideoExistsAndPlay();
-    initControls();
-    animate();
-  });
-
-  recenterBtn.addEventListener('click', () => {
-    if (controls) {
-      referenceQuaternion = controls.object.quaternion.clone();
+  async function motionPerm(){
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+      try { await DeviceMotionEvent.requestPermission(); } catch(e){}
     }
-  });
-
-  ipdSlider.addEventListener('input', () => { /* nothing here — used each frame */ });
-  fovSlider.addEventListener('input', () => {
-    const fv = Number(fovSlider.value);
-    leftCamera.fov = fv;
-    rightCamera.fov = fv;
-    leftCamera.updateProjectionMatrix();
-    rightCamera.updateProjectionMatrix();
-  });
-
-  loadUrlBtn.addEventListener('click', () => {
-    const url = videoUrlInput.value.trim();
-    if (!url) return alert('Paste a valid video URL (mp4 or HLS).');
-    loadVideo(url).catch(e => alert('Failed to load URL: ' + e));
-  });
-
-  videoSelect.addEventListener('change', () => {
-    const v = videoSelect.value;
-    if (v) videoUrlInput.value = v;
-  });
-
-  // Create <video> element but DO NOT autoplay until user gesture
-  function makeVideoElement(src) {
-    if (video) {
-      video.pause();
-      video.src = '';
-      video.removeAttribute('src');
-      video.load();
-    }
-    const vid = document.createElement('video');
-    vid.setAttribute('playsinline', ''); // very important for iOS
-    vid.muted = true;                    // muted allows autoplay on many browsers
-    vid.loop = true;
-    vid.crossOrigin = 'anonymous';
-    vid.preload = 'auto';
-    vid.style.display = 'none';
-    vid.src = src;
-    document.body.appendChild(vid);
-    return vid;
   }
 
-  async function loadVideo(src) {
-    // If src is empty string, use sample from bundle
-    if (!src) src = '360sample.mp4';
-    const v = makeVideoElement(src);
-    video = v;
-    // create/update texture
-    videoTexture = new THREE.VideoTexture(video);
-    videoTexture.minFilter = THREE.LinearFilter;
-    videoTexture.magFilter = THREE.LinearFilter;
-    videoTexture.format = THREE.RGBAFormat;
-    sphere.material.map = videoTexture;
-    sphere.material.needsUpdate = true;
-
-    // don't call play() here — must be user gesture (we do in ensureVideoExistsAndPlay)
+  function enterFullscreen(el){
+    const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    try { fs && fs.call(el); } catch(e){}
   }
 
-  async function ensureVideoExistsAndPlay() {
-    // If user didn't pick a URL, use selected or bundle.
-    const candidate = videoUrlInput.value.trim() || videoSelect.value || '360sample.mp4';
-    if (!video || (video.src && !video.src.endsWith(candidate))) {
-      await loadVideo(candidate);
-    }
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    await motionPerm();
+
     try {
-      // On iOS, video.play() may require muted = true and user gesture
-      await video.play();
-      // For some iOS versions, setting muted after play triggers problems — ensure muted true beforehand.
-    } catch (err) {
-      console.warn('video.play() failed, trying with muted true then unmute later', err);
-      video.muted = true;
-      await video.play();
-    }
-  }
+      // Set src only on user gesture, then start playback
+      if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
+      await video.play().catch(()=>{});
 
-  // DeviceOrientation permission flow for iOS 13+ and generic handling
-  async function requestIOSMotionPermissionIfNeeded() {
-    // Some iOS versions require explicit permission through DeviceOrientationEvent
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-      try {
-        const response = await DeviceMotionEvent.requestPermission();
-        if (response !== 'granted') {
-          alert('Motion permission denied — orientation controls will not work. Use touch to look around.');
-        }
-      } catch (e) {
-        console.warn('DeviceMotion permission request error', e);
-      }
-    }
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        const response = await DeviceOrientationEvent.requestPermission();
-        if (response !== 'granted') {
-          alert('Orientation permission denied — orientation controls will not work. Use touch to look around.');
-        }
-      } catch (e) {
-        console.warn('DeviceOrientation permission request error', e);
-      }
-    }
-  }
+      // Bind to the sphere after playback starts (more reliable on iOS)
+      sphere.setAttribute('material', 'shader: flat; src: #video');
 
-  // initialize DeviceOrientationControls (falls back to mouse/touch rotation if not available)
-  function initControls() {
-    controls = new DeviceOrientationControls(leftCamera); // we'll reuse orientation for both cameras
-    // start with identity reference
-    referenceQuaternion = null;
-  }
-
-  // Render loop: render left and right to split-screen with cameras offset by half-IPD
-  function animate() {
-    requestAnimationFrame(animate);
-
-    if (!videoTexture) return;
-
-    // update controls (reads device orientation into leftCamera)
-    if (controls) controls.update(); // controls modifies leftCamera.quaternion
-
-    // If referenceQuaternion is set, apply relative rotation
-    const baseQuat = leftCamera.quaternion.clone();
-    if (referenceQuaternion) {
-      // compute relative: base * inverse(reference)
-      const invRef = referenceQuaternion.clone().invert();
-      baseQuat.premultiply(invRef);
-    }
-
-    // We'll set both camera's quaternion to the computed orientation
-    leftCamera.quaternion.copy(baseQuat);
-    rightCamera.quaternion.copy(baseQuat);
-
-    // Compute eye offsets in camera space:
-    const ipd = parseFloat(ipdSlider.value) || 0.064; // meters
-    // Convert offset to world units consistent with our scene (sphere radius 500)
-    // We'll offset along camera's local X axis.
-    const leftPos = new THREE.Vector3(-ipd / 2 * 1000, 0, 0);   // scale factor so parallax is visible
-    const rightPos = new THREE.Vector3(ipd / 2 * 1000, 0, 0);
-
-    // Convert local offsets to world space using camera quaternion
-    leftPos.applyQuaternion(baseQuat);
-    rightPos.applyQuaternion(baseQuat);
-
-    // place cameras slightly forward from origin to avoid being exactly at origin (optional)
-    const forward = new THREE.Vector3(0, 0, 0); // origin
-    leftCamera.position.copy(forward).add(leftPos);
-    rightCamera.position.copy(forward).add(rightPos);
-
-    // Setup aspect and FOV for current canvas size
-    const canvas = renderer.domElement;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-
-    // left eye viewport
-    const eyeW = Math.floor(w / 2);
-    const eyeH = h;
-
-    renderer.setScissorTest(true);
-    renderer.clear();
-
-    // Left
-    renderer.setViewport(0, 0, eyeW, eyeH);
-    renderer.setScissor(0, 0, eyeW, eyeH);
-    leftCamera.aspect = eyeW / eyeH;
-    leftCamera.updateProjectionMatrix();
-    renderer.render(scene, leftCamera);
-
-    // Right
-    renderer.setViewport(eyeW, 0, eyeW, eyeH);
-    renderer.setScissor(eyeW, 0, eyeW, eyeH);
-    rightCamera.aspect = eyeW / eyeH;
-    rightCamera.updateProjectionMatrix();
-    renderer.render(scene, rightCamera);
-
-    renderer.setScissorTest(false);
-  }
-
-  // Basic resize handling
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // If user drops a file onto page, load it as the video (handy for testing)
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files?.[0];
-    if (f && f.type.startsWith('video')) {
-      const blobURL = URL.createObjectURL(f);
-      videoUrlInput.value = blobURL;
-      await loadVideo(blobURL);
-      alert('Video loaded from file. Press Start to play.');
+      // Try VR split (Cardboard on iOS). Fallback: fullscreen.
+      try { await scene.enterVR(); }
+      catch (e) { enterFullscreen(scene); }
+    } finally {
+      setTimeout(()=>{ btn.disabled = false; }, 1200);
     }
   });
 
-  // pre-load default bundle candidate (does not autoplay)
-  // NOTE: replace '360sample.mp4' with your bundled file path or serve it alongside this html
-  loadVideo('360sample.mp4').catch(()=>{ /* ignore if not present */ });
-
-  </script>
+  // Optional: log errors to console
+  video.addEventListener('error', () => console.warn('Video error:', video.error));
+</script>
 </body>
 </html>
-From: Osama Hesham <osamahesham357@gmail.com>
-Sent: Monday, August 11, 2025 1:31 AM
-To: Elkhodary, Gasser <gelkhoda@vols.utk.edu>
-Subject:
- 
-Show quoted text
