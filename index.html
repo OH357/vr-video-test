@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 (Local: vr_360_video.mp4)</title>
+  <title>VR 360 (GitHub Pages, iOS-safe)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
@@ -30,7 +30,7 @@
   <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
 </a-scene>
 
-<!-- Local video (same folder) — bound after tap -->
+<!-- Same-origin local video (next to index.html). Bound after a tap. -->
 <video id="video" style="display:none" loop muted playsinline webkit-playsinline>
   <source src="./vr_360_video.mp4" type="video/mp4" />
 </video>
@@ -58,7 +58,7 @@
     await motionPerm();
 
     try {
-      // Start playback (iOS requires user gesture), then bind as texture
+      // Start playback (user gesture) then bind as texture (iOS requirement)
       await video.play().catch(()=>{});
       sphere.setAttribute('material', 'shader: flat; src: #video');
 
@@ -70,7 +70,7 @@
     }
   });
 
-  // Optional: quick error log
+  // (Optional) quick error log to Safari console
   video.addEventListener('error', () => console.warn('Video error:', video.error));
 </script>
 </body>
