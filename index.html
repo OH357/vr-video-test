@@ -1,157 +1,150 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 – Auto Cardboard (Worker)</title>
+  <title>VR 360 Video</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
-    html,body{margin:0;height:100%;overflow:hidden;background:#000}
-    canvas{display:block;width:100vw;height:100vh}
-    #overlay{
-      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
-      color:#fff;background:rgba(0,0,0,.85);font:600 18px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      letter-spacing:.2px;z-index:10;text-align:center;padding:24px;cursor:pointer;user-select:none
+    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
+    a-scene { width:100%; height:100%; display:none; }
+    #enter-vr-btn{
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      padding:20px 40px; font-size:1.5em; background:#ff5500; color:#fff;
+      border:none; border-radius:12px; cursor:pointer; z-index:1000;
+      box-shadow:0 6px 20px rgba(0,0,0,.35);
     }
-    #small{opacity:.8;font-size:13px;margin-top:8px}
-    #divider{position:fixed;z-index:5;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.25);pointer-events:none;display:none}
+    #install-msg{
+      position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+      color:#fff; font-size:1em; background:rgba(0,0,0,.6);
+      padding:10px 14px; border-radius:8px; z-index:999; text-align:center;
+      max-width:90%;
+    }
+    #countdown{
+      position:absolute; bottom:50%; left:50%; transform:translateX(-50%);
+      color:#fff; font-size:2em; z-index:998; display:none; text-shadow:0 2px 8px #000;
+    }
+    #fallback{
+      position:absolute; top:12px; left:12px; z-index:1001; display:none;
+    }
+    #fallback button{
+      padding:10px 14px; border-radius:8px; border:none; cursor:pointer;
+    }
   </style>
 </head>
 <body>
-  <div id="overlay">
-    Tap anywhere to start 360 VR
-    <div id="small">If iPhone asks for Motion/Orientation permission, allow it.</div>
+
+  <button id="enter-vr-btn">🎥 Enter VR</button>
+  <div id="install-msg">📲 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
+  <div id="countdown">Starting in 5...</div>
+
+  <!-- Optional fallback inline player -->
+  <div id="fallback">
+    <button id="play-inline">Play Inline (non-VR)</button>
   </div>
-  <div id="divider"></div>
 
-  <!-- Hidden video; we texture it onto a sphere -->
-  <video id="video" muted playsinline webkit-playsinline preload="metadata" style="display:none"></video>
+  <a-scene embedded vr-mode-ui="enabled: true" id="scene">
+    <a-assets timeout="20000">
+      <!-- Updated Dropbox direct-play link -->
+      <video
+        id="video"
+        preload="auto"
+        loop
+        muted
+        playsinline
+        webkit-playsinline
+        crossorigin="anonymous">
+        <source src="https://dl.dropboxusercontent.com/scl/fi/qk3mypjauxppashndes61/vr_360_video.mp4?rlkey=4ycqo8efz90kffgbnylf748ur&st=29yzz4lo&raw=1" type="video/mp4" />
+      </video>
 
-  <!-- Three.js + device orientation control -->
-  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.158.0/examples/js/controls/DeviceOrientationControls.js"></script>
+      <!-- 1-second silent audio to satisfy mobile autoplay + keep device awake-ish -->
+      <audio id="silent-audio" autoplay loop>
+        <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg" />
+      </audio>
+    </a-assets>
+
+    <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
+    <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
+  </a-scene>
 
   <script>
-    // Your Cloudflare Worker proxy (CORS + Range enabled)
-    const VIDEO_URL = 'https://polished-river-9252.osamahesham357.workers.dev/';
+    const button = document.getElementById('enter-vr-btn');
+    const installMsg = document.getElementById('install-msg');
+    const scene = document.getElementById('scene');
+    const video = document.getElementById('video');
+    const audio = document.getElementById('silent-audio');
+    const countdown = document.getElementById('countdown');
+    const fallback = document.getElementById('fallback');
+    const playInlineBtn = document.getElementById('play-inline');
 
-    const vid = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const small = document.getElementById('small');
-    const divider = document.getElementById('divider');
-
-    let renderer, scene, camera, controls, mesh, texture, split=false, running=false;
-
-    function status(msg){ small.textContent = msg; }
-
-    // Init THREE
-    function initThree(){
-      renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-      renderer.setPixelRatio(window.devicePixelRatio || 1);
-      document.body.appendChild(renderer.domElement);
-
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-      camera.position.set(0,0,0.1);
-      controls = new THREE.DeviceOrientationControls(camera);
-
-      const geo = new THREE.SphereGeometry(500, 64, 64);
-      geo.scale(-1,1,1);
-      const mat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // map set after video starts
-      mesh = new THREE.Mesh(geo, mat);
-      scene.add(mesh);
-
-      window.addEventListener('resize', resize);
-      resize();
+    if (localStorage.getItem('installPromptDismissed')) {
+      installMsg.style.display = 'none';
     }
+    installMsg.addEventListener('click', () => {
+      installMsg.style.display = 'none';
+      localStorage.setItem('installPromptDismissed', '1');
+    });
 
-    function resize(){
-      const w = window.innerWidth, h = window.innerHeight;
-      renderer.setSize(w, h, false);
-      camera.aspect = split ? (0.5 * w / h) : (w / h);
-      camera.updateProjectionMatrix();
-    }
-
-    function animate(){
-      if (!running) return;
-      requestAnimationFrame(animate);
-      controls.update();
-
-      if (split){
-        const w = renderer.domElement.width, h = renderer.domElement.height;
-        renderer.setScissorTest(true);
-        renderer.setViewport(0,0,w/2,h);   renderer.setScissor(0,0,w/2,h);   renderer.render(scene,camera);
-        renderer.setViewport(w/2,0,w/2,h); renderer.setScissor(w/2,0,w/2,h); renderer.render(scene,camera);
-        renderer.setScissorTest(false);
-      } else {
-        renderer.render(scene, camera);
-      }
-    }
-
-    function enterFullscreen(el){
-      const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      try { fs && fs.call(el); } catch(e){}
-    }
-
-    async function motionPerm(){
+    async function requestMotionPermission() {
       if (typeof DeviceMotionEvent !== 'undefined' &&
           typeof DeviceMotionEvent.requestPermission === 'function') {
-        try { await DeviceMotionEvent.requestPermission(); } catch(e){}
+        try { await DeviceMotionEvent.requestPermission(); } catch(e) {}
       }
     }
 
-    async function start(){
-      overlay.style.pointerEvents = 'none';
-      status('Starting…');
-      await motionPerm();
-
-      // Prepare video element
-      vid.muted = true;
-      vid.setAttribute('playsinline', '');
-      vid.setAttribute('webkit-playsinline', '');
-      vid.autoplay = true;
-      vid.crossOrigin = 'anonymous'; // Worker sends permissive CORS
-
-      // Set src on tap, then load + play
-      if (vid.src !== VIDEO_URL) vid.src = VIDEO_URL;
-      try { vid.load(); } catch(e){}
-
+    let wakeLock = null;
+    async function lockScreen() {
       try {
-        await vid.play(); // should succeed (muted + user gesture)
-      } catch(e) {
-        // If autoplay still fails, show native controls as fallback
-        overlay.style.display = 'none';
-        vid.style.display = 'block';
-        vid.controls = true;
-        return;
-      }
-
-      if (!renderer) initThree();
-
-      // Use as texture
-      texture = new THREE.VideoTexture(vid);
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.format = THREE.RGBFormat;
-      mesh.material.map = texture;
-      mesh.material.needsUpdate = true;
-
-      // Force Cardboard split + fullscreen
-      split = true;
-      divider.style.display = 'block';
-      overlay.style.display = 'none';
-      enterFullscreen(document.documentElement);
-
-      if (!running){ running = true; animate(); }
-      resize();
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible' && wakeLock !== null) {
+              try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+            }
+          });
+        }
+      } catch(e) {}
     }
 
-    // One tap anywhere on overlay to begin
-    overlay.addEventListener('click', start, { passive: true });
-    overlay.addEventListener('touchstart', start, { passive: true });
+    button.addEventListener('click', async () => {
+      button.style.display = 'none';
+      countdown.style.display = 'block';
 
-    // Log errors (for Safari dev console)
-    vid.addEventListener('error', () => console.warn('Video error:', vid.error));
+      await requestMotionPermission();
+      try { await audio.play(); } catch (e) {}
+      try { await video.play(); } catch (e) {
+        fallback.style.display = 'block';
+      }
+
+      const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
+      try { fs && fs.call(scene); } catch (e) {}
+      scene.style.display = 'block';
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+      lockScreen();
+
+      let t = 5;
+      countdown.innerText = `Starting in ${t}...`;
+      const timer = setInterval(() => {
+        t--;
+        if (t <= 0) {
+          clearInterval(timer);
+          countdown.style.display = 'none';
+        } else {
+          countdown.innerText = `Starting in ${t}...`;
+        }
+      }, 1000);
+    });
+
+    playInlineBtn.addEventListener('click', async () => {
+      try { await video.play(); } catch(e) {}
+      fallback.style.display = 'none';
+      scene.style.display = 'block';
+    });
+
+    video.addEventListener('error', () => {
+      console.warn('Video error:', video.error);
+    });
   </script>
 </body>
 </html>
