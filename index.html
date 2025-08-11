@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 – iOS Cardboard (Dropbox)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>VR 360 – Auto Cardboard (Worker)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>
     html,body{margin:0;height:100%;overflow:hidden;background:#000}
@@ -24,20 +24,21 @@
   </div>
   <div id="divider"></div>
 
-  <!-- Hidden video; used as texture or fallback shown fullscreen -->
+  <!-- Hidden video; we texture it onto a sphere -->
   <video id="video" muted playsinline webkit-playsinline preload="metadata" style="display:none"></video>
 
+  <!-- Three.js + device orientation control -->
   <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.158.0/examples/js/controls/DeviceOrientationControls.js"></script>
 
   <script>
-    // Dropbox direct link you gave
-    const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/qk3mypjauxppashndes61/vr_360_video.mp4?rlkey=4ycqo8efz90kffgbnylf748ur&st=29yzz4lo&raw=1';
+    // Your Cloudflare Worker proxy (CORS + Range enabled)
+    const VIDEO_URL = 'https://polished-river-9252.osamahesham357.workers.dev/';
 
+    const vid = document.getElementById('video');
     const overlay = document.getElementById('overlay');
     const small = document.getElementById('small');
     const divider = document.getElementById('divider');
-    const vid = document.getElementById('video');
 
     let renderer, scene, camera, controls, mesh, texture, split=false, running=false;
 
@@ -56,7 +57,7 @@
 
       const geo = new THREE.SphereGeometry(500, 64, 64);
       geo.scale(-1,1,1);
-      const mat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // will set map after video starts
+      const mat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // map set after video starts
       mesh = new THREE.Mesh(geo, mat);
       scene.add(mesh);
 
@@ -75,10 +76,11 @@
       if (!running) return;
       requestAnimationFrame(animate);
       controls.update();
+
       if (split){
         const w = renderer.domElement.width, h = renderer.domElement.height;
         renderer.setScissorTest(true);
-        renderer.setViewport(0,0,w/2,h); renderer.setScissor(0,0,w/2,h); renderer.render(scene,camera);
+        renderer.setViewport(0,0,w/2,h);   renderer.setScissor(0,0,w/2,h);   renderer.render(scene,camera);
         renderer.setViewport(w/2,0,w/2,h); renderer.setScissor(w/2,0,w/2,h); renderer.render(scene,camera);
         renderer.setScissorTest(false);
       } else {
@@ -100,67 +102,56 @@
 
     async function start(){
       overlay.style.pointerEvents = 'none';
-      status('Requesting permissions…');
-
+      status('Starting…');
       await motionPerm();
 
-      // Prepare video element (iOS quirks)
+      // Prepare video element
       vid.muted = true;
       vid.setAttribute('playsinline', '');
       vid.setAttribute('webkit-playsinline', '');
       vid.autoplay = true;
-      // If host supports it, CORS helps when used as texture
-      vid.crossOrigin = 'anonymous';
+      vid.crossOrigin = 'anonymous'; // Worker sends permissive CORS
 
-      // Set src on user gesture, then load+play
+      // Set src on tap, then load + play
       if (vid.src !== VIDEO_URL) vid.src = VIDEO_URL;
       try { vid.load(); } catch(e){}
 
-      status('Starting video… (if this hangs, codec/host issue)');
       try {
-        await vid.play();  // should succeed because muted + user gesture
+        await vid.play(); // should succeed (muted + user gesture)
       } catch(e) {
-        status('Could not auto-play. Showing inline player.');
-        // Fallback: show inline controls so user can press play
+        // If autoplay still fails, show native controls as fallback
+        overlay.style.display = 'none';
         vid.style.display = 'block';
         vid.controls = true;
-        overlay.style.display = 'none';
         return;
       }
 
-      // Init 3D scene after video is actually playing
       if (!renderer) initThree();
 
-      // Try to use as texture
-      try {
-        texture = new THREE.VideoTexture(vid);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.format = THREE.RGBFormat;
-        mesh.material.map = texture;
-        mesh.material.needsUpdate = true;
+      // Use as texture
+      texture = new THREE.VideoTexture(vid);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.format = THREE.RGBFormat;
+      mesh.material.map = texture;
+      mesh.material.needsUpdate = true;
 
-        // Force Cardboard split
-        split = true;
-        divider.style.display = 'block';
-        overlay.style.display = 'none';
-        enterFullscreen(document.documentElement);
+      // Force Cardboard split + fullscreen
+      split = true;
+      divider.style.display = 'block';
+      overlay.style.display = 'none';
+      enterFullscreen(document.documentElement);
 
-        if (!running){ running = true; animate(); }
-        resize();
-      } catch(e) {
-        // If texture fails (likely CORS), show video fullscreen as last resort
-        status('Texture failed (CORS). Showing video fullscreen.');
-        vid.style.display = 'block';
-        vid.controls = true;
-        overlay.style.display = 'none';
-        enterFullscreen(vid);
-      }
+      if (!running){ running = true; animate(); }
+      resize();
     }
 
-    // Single tap to start
+    // One tap anywhere on overlay to begin
     overlay.addEventListener('click', start, { passive: true });
     overlay.addEventListener('touchstart', start, { passive: true });
+
+    // Log errors (for Safari dev console)
+    vid.addEventListener('error', () => console.warn('Video error:', vid.error));
   </script>
 </body>
 </html>
