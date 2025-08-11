@@ -1,146 +1,36 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <title>VR 360 Video</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <style>
-    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
-    a-scene { width:100%; height:100%; display:none; }
-    #enter-vr-btn{
-      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-      padding:20px 40px; font-size:1.5em; background:#ff5500; color:#fff;
-      border:none; border-radius:12px; cursor:pointer; z-index:1000;
-      box-shadow:0 6px 20px rgba(0,0,0,.35);
-    }
-    #install-msg{
-      position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
-      color:#fff; font-size:1em; background:rgba(0,0,0,.6);
-      padding:10px 14px; border-radius:8px; z-index:999; text-align:center;
-      max-width:90%;
-    }
-    #countdown{
-      position:absolute; bottom:50%; left:50%; transform:translateX(-50%);
-      color:#fff; font-size:2em; z-index:998; display:none; text-shadow:0 2px 8px #000;
-    }
-    #fallback{
-      position:absolute; top:12px; left:12px; z-index:1001; display:none;
-    }
-    #fallback button{
-      padding:10px 14px; border-radius:8px; border:none; cursor:pointer;
-    }
-  </style>
-</head>
-<body>
+  <head>
+    <meta charset="utf-8">
+    <title>Forced Stereo VR 360</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-stereo-component@0.6.0/dist/aframe-stereo-component.min.js"></script>
+    <style>
+      html, body { margin:0; height:100%; background:#000; }
+    </style>
+  </head>
+  <body>
+    <a-scene vr-mode-ui="enabled: true" embedded>
+      <a-assets>
+        <!-- STEREO side-by-side video -->
+        <video id="video" autoplay loop muted playsinline webkit-playsinline crossorigin="anonymous">
+          <source src="https://dl.dropboxusercontent.com/scl/fi/utgpd1pjcu0up53r1ptr8/preview.mp4?rlkey=dqkeowyhp2voxe7wxkvbeo5ar&st=tvsj40te&raw=1" type="video/mp4">
+        </video>
+      </a-assets>
 
-  <button id="enter-vr-btn">🎥 Enter VR</button>
-  <div id="install-msg">📲 For fullscreen VR, tap <strong>Share → Add to Home Screen</strong></div>
-  <div id="countdown">Starting in 5...</div>
+      <!-- Force stereo playback -->
+      <a-videosphere src="#video" rotation="0 -90 0" stereo="left-right"></a-videosphere>
+      <a-entity camera look-controls></a-entity>
+    </a-scene>
 
-  <div id="fallback">
-    <button id="play-inline">Play Inline (non-VR)</button>
-  </div>
-
-  <a-scene embedded vr-mode-ui="enabled: true" id="scene">
-    <a-assets timeout="20000">
-      <video
-        id="video"
-        preload="auto"
-        loop
-        muted
-        playsinline
-        webkit-playsinline
-        crossorigin="anonymous">
-        <source src="https://dl.dropboxusercontent.com/scl/fi/utgpd1pjcu0up53r1ptr8/preview.mp4?rlkey=dqkeowyhp2voxe7wxkvbeo5ar&st=tvsj40te&raw=1" type="video/mp4" />
-      </video>
-      <audio id="silent-audio" autoplay loop>
-        <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.mp3" type="audio/mpeg" />
-      </audio>
-    </a-assets>
-
-    <a-videosphere src="#video" rotation="0 -90 0"></a-videosphere>
-    <a-camera look-controls="magicWindowTrackingEnabled: true"></a-camera>
-  </a-scene>
-
-  <script>
-    const btn = document.getElementById('enter-vr-btn');
-    const msg = document.getElementById('install-msg');
-    const scene = document.getElementById('scene');
-    const video = document.getElementById('video');
-    const audio = document.getElementById('silent-audio');
-    const countdown = document.getElementById('countdown');
-    const fallback = document.getElementById('fallback');
-    const playInlineBtn = document.getElementById('play-inline');
-
-    if (localStorage.getItem('installPromptDismissed')) msg.style.display = 'none';
-    msg.addEventListener('click', () => {
-      msg.style.display = 'none';
-      localStorage.setItem('installPromptDismissed', '1');
-    });
-
-    async function requestMotionPermission() {
-      if (typeof DeviceMotionEvent !== 'undefined' &&
-          typeof DeviceMotionEvent.requestPermission === 'function') {
-        try { await DeviceMotionEvent.requestPermission(); } catch(e) {}
-      }
-    }
-
-    let wakeLock = null;
-    async function lockScreen() {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-          document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible' && wakeLock !== null) {
-              try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
-            }
-          });
+    <script>
+      // iOS motion permission
+      document.querySelector('a-scene').addEventListener('enter-vr', async () => {
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+          try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
         }
-      } catch(e) {}
-    }
-
-    btn.addEventListener('click', async () => {
-      btn.style.display = 'none';
-      countdown.style.display = 'block';
-      await requestMotionPermission();
-
-      try { await audio.play(); } catch {}
-
-      try {
-        await video.play();
-      } catch (e) {
-        fallback.style.display = 'block';
-      }
-
-      const fs = scene.requestFullscreen || scene.webkitRequestFullscreen || scene.msRequestFullscreen;
-      try { fs && fs.call(scene); } catch {}
-
-      scene.style.display = 'block';
-      setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
-      lockScreen();
-
-      let t = 5;
-      countdown.innerText = `Starting in ${t}...`;
-      const timer = setInterval(() => {
-        t--;
-        if (t <= 0) {
-          clearInterval(timer);
-          countdown.style.display = 'none';
-        } else {
-          countdown.innerText = `Starting in ${t}...`;
-        }
-      }, 1000);
-    });
-
-    playInlineBtn.addEventListener('click', async () => {
-      try { await video.play(); } catch(e) {}
-      fallback.style.display = 'none';
-      scene.style.display = 'block';
-    });
-
-    video.addEventListener('error', () => console.warn('Video error:', video.error));
-  </script>
-</body>
+      });
+    </script>
+  </body>
 </html>
