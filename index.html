@@ -2,8 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>VR 360 (MOV iPhone Fix)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>VR 360 (Tap to Enter)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <style>
@@ -14,84 +14,62 @@
       padding:16px 22px; border:0; border-radius:12px; background:#ff5500; color:#fff;
       font:600 16px/1.2 system-ui, sans-serif; z-index:1000; box-shadow:0 6px 20px rgba(0,0,0,.35);
     }
-    #msg {
+    #hint {
       position:absolute; left:12px; bottom:12px; color:#fff; opacity:.8; z-index:999;
-      font: 14px/1.4 system-ui, sans-serif; max-width:70%;
+      font:14px/1.4 system-ui, sans-serif; max-width:70%;
     }
   </style>
 </head>
 <body>
 
 <button id="enter">Enter VR</button>
-<div id="msg">If nothing happens: iOS Settings → Safari → Motion & Orientation Access = ON.</div>
+<div id="hint">If nothing happens on iPhone: Settings → Safari → Motion & Orientation Access = ON.</div>
 
-<a-scene id="scene"
-         renderer="antialias:true; xrCompatible:true"
-         vr-mode-ui="enabled:true"
-         loading-screen="enabled:false">
-  <a-entity id="cam" camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
+<a-scene id="scene" renderer="antialias:true; xrCompatible:true" vr-mode-ui="enabled:true" loading-screen="enabled:false">
+  <a-entity camera look-controls="magicWindowTrackingEnabled:true"></a-entity>
   <a-videosphere id="sphere" rotation="0 -90 0"></a-videosphere>
 </a-scene>
 
-<!-- Hidden video element we control manually -->
-<video id="video"
-       style="display:none"
-       preload="metadata"
-       loop
-       muted
-       playsinline
-       webkit-playsinline
-       crossorigin="anonymous">
-</video>
+<!-- Hidden video we bind after user tap -->
+<video id="video" style="display:none" loop muted playsinline webkit-playsinline></video>
 
 <script>
   const btn = document.getElementById('enter');
   const scene = document.getElementById('scene');
-  const video = document.getElementById('video');
   const sphere = document.getElementById('sphere');
+  const video = document.getElementById('video');
 
-  // Your Dropbox direct-play MOV link
-  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/4822eijxhmu6suku7d4wl/preview.mov?rlkey=d4coqps4az50w9kfw5zubkudm&st=nnwrcnms&raw=1';
+  // New direct-play link (Dropbox share -> raw)
+  const VIDEO_URL = 'https://dl.dropboxusercontent.com/scl/fi/wlj2mp0nsm93applhnwvc/preview_1.mov?rlkey=4d2i7miokqre69o31so60wttt&st=sm5gkez5&raw=1';
 
-  async function ensureMotionPermission() {
+  async function motionPerm(){
     if (typeof DeviceMotionEvent !== 'undefined' &&
         typeof DeviceMotionEvent.requestPermission === 'function') {
-      try { await DeviceMotionEvent.requestPermission(); } catch (e) {}
+      try { await DeviceMotionEvent.requestPermission(); } catch(e){}
     }
   }
 
-  function enterFullscreen(el) {
+  function enterFullscreen(el){
     const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    try { fs && fs.call(el); } catch(e) {}
+    try { fs && fs.call(el); } catch(e){}
   }
 
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-
-    await ensureMotionPermission();
+    await motionPerm();
 
     try {
-      // Set src only now (user gesture) then prime playback
       if (video.src !== VIDEO_URL) video.src = VIDEO_URL;
+      // Start playback (user gesture) then bind as texture
       await video.play().catch(()=>{});
-
-      // Bind to sphere AFTER playback has started
       sphere.setAttribute('material', 'shader: flat; src: #video');
 
-      // Try to enter VR (Cardboard split on iOS Safari)
-      try {
-        await scene.enterVR();
-      } catch (e) {
-        // Fallback to fullscreen so user can still look around
-        enterFullscreen(scene);
-      }
-    } catch (err) {
-      console.warn('Playback/VR error:', err);
-      sphere.setAttribute('material', 'src', '#video');
-      enterFullscreen(scene);
+      // Try VR split (Cardboard on iOS)
+      try { await scene.enterVR(); }
+      catch (e) { enterFullscreen(scene); }
+    } finally {
+      setTimeout(()=>{ btn.disabled = false; }, 1200);
     }
-
-    setTimeout(()=>{ btn.disabled = false; }, 1500);
   });
 
   video.addEventListener('error', () => {
